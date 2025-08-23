@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi.responses import JSONResponse
 import uvicorn
-
+from app.api import chart
 from src.common.utils.logger import set_logger
 from src.common.error import JSendError, ErrorCode
 
@@ -71,7 +71,7 @@ app.add_middleware(
 
 # 라우터 등록
 # app.include_router(router, prefix="/api/v2/test")
-
+app.include_router(chart.router)
 
 @app.get("/health")
 async def health_check():

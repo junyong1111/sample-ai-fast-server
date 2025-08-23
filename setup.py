@@ -20,6 +20,7 @@ setup(
         # JWT 토큰 발급
         "python-jose[cryptography]==3.3.0",
         "passlib[bcrypt]==1.7.4",
+        "PyJWT==2.8.0",
 
         # 데이터 검증
         "pydantic==2.11.5",
@@ -27,6 +28,13 @@ setup(
 
         # 로깅
         "colorlog==6.9.0",
+
+        #네트워크
+        "httpx==0.27.2",
+        "asyncio==3.4.3",
+
+        # 업비트
+        "pyupbit==0.2.34",
     ],
     extras_require={
         "dev": [
