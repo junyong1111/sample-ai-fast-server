@@ -35,6 +35,10 @@ setup(
 
         # 업비트
         "pyupbit==0.2.34",
+
+        # MongoDB 연동
+        "pymongo==4.6.0",
+        "motor==3.3.2",
     ],
     extras_require={
         "dev": [
