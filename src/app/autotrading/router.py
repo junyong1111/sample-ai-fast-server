@@ -1,7 +1,7 @@
 # src/app/routers/chart.py
 from fastapi import APIRouter, Query
 from typing import Literal
-from src.app.service.chart import ChartService, Timeframe
+from src.app.autotrading.service import ChartService, Timeframe
 
 router = APIRouter(prefix="/charts")
 svc = ChartService()

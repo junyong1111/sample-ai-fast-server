@@ -1,0 +1,22 @@
+[2025-08-30 22:16:27,371] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:16:28,093] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:07,482] | INFO     | exception [main.py:lifespan:78] >> 🛑 FastAPI 종료
+[2025-08-30 22:17:09,997] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:10,466] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:13,644] | INFO     | exception [main.py:lifespan:78] >> 🛑 FastAPI 종료
+[2025-08-30 22:17:15,879] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:16,394] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:22,300] | INFO     | exception [main.py:lifespan:78] >> 🛑 FastAPI 종료
+[2025-08-30 22:17:24,762] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:25,184] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:27,563] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:27,989] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:31,466] | INFO     | exception [main.py:lifespan:78] >> 🛑 FastAPI 종료
+[2025-08-30 22:17:33,732] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:34,156] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:42,924] | INFO     | exception [main.py:lifespan:78] >> 🛑 FastAPI 종료
+[2025-08-30 22:17:45,531] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:46,005] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료
+[2025-08-30 22:17:53,142] | INFO     | exception [main.py:lifespan:78] >> 🛑 FastAPI 종료
+[2025-08-30 22:17:55,367] | INFO     | exception [main.py:lifespan:65] >> 🚀 FastAPI 시작
+[2025-08-30 22:17:55,793] | INFO     | exception [main.py:lifespan:70] >> ✅ 전역 서비스 초기화 완료

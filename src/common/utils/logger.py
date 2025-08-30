@@ -9,7 +9,7 @@ from functools import wraps
 
 from colorlog import ColoredFormatter
 
-from src.common.conf.settings import settings
+from src.config.setting import settings
 from src.common.constants import DEFAULT_LOGGING_LEVEL
 
 ROOT_PKG = "quiz-api"

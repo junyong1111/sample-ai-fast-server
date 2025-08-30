@@ -1,21 +1,45 @@
-#!/usr/bin/env python3
 """
 🚀 FastAPI autotrading
 """
+
+from fastapi import FastAPI
+from playwright.async_api import async_playwright
+from src.app.url import blog_router, autotrading_router
 import logging
 import os
 import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-
 from fastapi.responses import JSONResponse
 import uvicorn
-from app.api import chart
+from src.app.url import autotrading_router, blog_router
 from src.common.utils.logger import set_logger
 from src.common.error import JSendError, ErrorCode
 
 
+
+app = FastAPI(title="HTML to Image (minimal)")
+
+app.include_router(blog_router.router, prefix="/blog")
+app.include_router(autotrading_router.router, prefix="/autotrading")
+
+
+async def startup():
+    pw = await async_playwright().start()
+    browser = await pw.chromium.launch(args=["--no-sandbox"])
+    context = await browser.new_context(locale="ko-KR", device_scale_factor=1.0, offline=False)
+    app.state.pw = pw
+    app.state.browser = browser
+    app.state.context = context
+
+async def shutdown():
+    try:
+        await app.state.context.close()
+        await app.state.browser.close()
+        await app.state.pw.stop()
+    except Exception:
+        pass
 
 # 로깅 설정
 log_dir = "../logs"
@@ -39,6 +63,7 @@ async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 시 실행"""
 
     logger.info("🚀 FastAPI 시작")
+    await startup()
 
     # 전역 서비스 초기화
     try:
@@ -48,6 +73,7 @@ async def lifespan(app: FastAPI):
         raise
 
     yield
+    await shutdown()
 
     logger.info("🛑 FastAPI 종료")
 
@@ -71,7 +97,9 @@ app.add_middleware(
 
 # 라우터 등록
 # app.include_router(router, prefix="/api/v2/test")
-app.include_router(chart.router)
+app.include_router(autotrading_router.router, prefix="/api/v1/autotrading")
+app.include_router(blog_router.router, prefix="/api/v1/blog")
+
 
 @app.get("/health")
 async def health_check():

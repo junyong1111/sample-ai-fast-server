@@ -14,10 +14,9 @@
                 "src.app.main:app",
                 "--reload",
                 "--port",
-                "7000"
-            ],
+                "8080"
+                ],
             "jinja": true
         }
-
     ]
 }

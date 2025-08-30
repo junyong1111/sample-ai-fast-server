@@ -1,0 +1,30 @@
+Metadata-Version: 2.4
+Name: fastapi-app
+Version: 0.1.0
+Summary: FastAPI app for SNSHelp API integration
+Author: devjun
+Author-email: jyporse@naver.com
+Classifier: Programming Language :: Python :: 3
+Classifier: Framework :: FastAPI
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.112.2
+Requires-Dist: uvicorn[standard]>=0.26.0
+Requires-Dist: pydantic>=2.7.1
+Requires-Dist: playwright>=1.46
+Requires-Dist: requests>=2.32.5
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: motor>=3.3.2
+Requires-Dist: pymongo>=4.6.0
+Requires-Dist: numpy>=2.2.3
+Requires-Dist: pandas>=2.2.3
+Requires-Dist: pydantic-settings>=2.5.2
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description-content-type
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
