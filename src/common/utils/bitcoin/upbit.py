@@ -4,41 +4,69 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, Literal, List
 from datetime import datetime, timezone
-
-import pyupbit
+import ccxt
 from fastapi.concurrency import run_in_threadpool
 
 
 INTERVAL_MAP = {
-    "days": "day",
-    "minutes:1": "minute1",
-    "minutes:3": "minute3",
-    "minutes:5": "minute5",
-    "minutes:10": "minute10",
-    "minutes:15": "minute15",
-    "minutes:30": "minute30",
-    "minutes:60": "minute60",
-    "minutes:240": "minute240",
+    "days": "1d",
+    "minutes:1": "1m",
+    "minutes:3": "3m",
+    "minutes:5": "5m",
+    "minutes:10": "10m",
+    "minutes:15": "15m",
+    "minutes:30": "30m",
+    "minutes:60": "1h",
+    "minutes:240": "4h",
 }
 
 
 class PyUpbitUtils:
-    def __init__(self):
-        pass
+    def __init__(self, api_key: str | None = None, secret: str | None = None):
+        """
+        업비트 API 유틸리티 클래스 (CCXT 사용)
+
+        Args:
+            api_key: 업비트 API 키 (선택사항)
+            secret: 업비트 시크릿 키 (선택사항)
+        """
+        self.api_key = api_key
+        self.secret = secret
+
+        # CCXT를 사용하여 업비트 연결
+        self.exchange = ccxt.upbit({
+            'apiKey': api_key,
+            'secret': secret,
+            'enableRateLimit': True,
+        })
 
     # ---------- Data fetch ----------
     async def get_chart_health(self) -> dict:
-        # 간단 헬스체크: 현재 시각과 PyUpbit 버전/필수 함수 존재 여부
-        import pyupbit
-        ok = hasattr(pyupbit, "get_ohlcv")
-        return {
-            "status": "ok" if ok else "degraded",
-            "pyupbit_version": getattr(pyupbit, "__version__", "unknown"),
-            "now_utc": datetime.now(timezone.utc).isoformat(),
-            "features": {
-                "get_ohlcv": ok
+        """업비트 API 헬스체크"""
+        try:
+            # 간단한 API 호출로 연결 상태 확인
+            ticker = await run_in_threadpool(self.exchange.fetch_ticker, 'KRW/BTC')
+            return {
+                "status": "ok",
+                "exchange": "upbit",
+                "now_utc": datetime.now(timezone.utc).isoformat(),
+                "features": {
+                    "ohlcv": True,
+                    "ticker": True
+                },
+                "last_price": ticker.get('last') if ticker else None
             }
-        }
+        except Exception as e:
+            return {
+                "status": "error",
+                "exchange": "upbit",
+                "now_utc": datetime.now(timezone.utc).isoformat(),
+                "error": str(e),
+                "features": {
+                    "ohlcv": False,
+                    "ticker": False
+                }
+            }
 
     async def get_ohlcv_df(
         self,
@@ -47,23 +75,50 @@ class PyUpbitUtils:
         count: int = 200,
     ) -> pd.DataFrame:
         """
-        PyUpbit 동기 호출을 threadpool로 감싸 비동기 FastAPI에서 안전하게 사용.
-        반환: index=Timestamp, columns=open/high/low/close/volume/...
+        업비트에서 OHLCV 데이터를 가져와서 DataFrame으로 반환
+
+        Args:
+            market: 거래쌍 (예: 'KRW-BTC')
+            tf: 시간프레임
+            count: 캔들 개수
+
+        Returns:
+            DataFrame with columns: open, high, low, close, volume
         """
-        interval = INTERVAL_MAP[tf]
-        df = await run_in_threadpool(pyupbit.get_ohlcv, market, interval=interval, count=count)
-        if df is None or df.empty:
-            raise ValueError(f"Empty OHLCV for {market} ({tf}, count={count})")
-        # 필요한 컬럼만 보장
-        required = {"open","high","low","close","volume"}
-        missing = required.difference(df.columns)
-        if missing:
-            raise ValueError(f"Missing columns in OHLCV: {missing}")
-        return df
+        try:
+            interval = INTERVAL_MAP[tf]
+
+            # CCXT를 사용하여 OHLCV 데이터 가져오기
+            ohlcv = await run_in_threadpool(
+                self.exchange.fetch_ohlcv,
+                market,
+                interval,
+                limit=count
+            )
+
+            if not ohlcv:
+                raise ValueError(f"Empty OHLCV for {market} ({tf}, count={count})")
+
+            # DataFrame으로 변환
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df.set_index('timestamp', inplace=True)
+
+            # 필요한 컬럼만 보장
+            required = {"open", "high", "low", "close", "volume"}
+            missing = required.difference(df.columns)
+            if missing:
+                raise ValueError(f"Missing columns in OHLCV: {missing}")
+
+            return df
+
+        except Exception as e:
+            raise ValueError(f"Failed to fetch OHLCV for {market}: {str(e)}")
 
     # ---------- Indicators ----------
     @staticmethod
     def rsi(series: pd.Series, period: int = 14) -> pd.Series:
+        """RSI 계산"""
         delta = series.diff()
         up = delta.clip(lower=0)
         down = (-delta).clip(lower=0)
@@ -74,6 +129,7 @@ class PyUpbitUtils:
 
     @staticmethod
     def bollinger(close: pd.Series, period: int = 20, k: float = 2.0):
+        """볼린저 밴드 계산"""
         ma = close.rolling(period).mean()
         sd = close.rolling(period).std(ddof=0)
         upper = ma + k * sd
@@ -84,10 +140,12 @@ class PyUpbitUtils:
 
     @staticmethod
     def ema(series: pd.Series, span: int) -> pd.Series:
+        """지수이동평균 계산"""
         return series.ewm(span=span, adjust=False).mean()
 
     @staticmethod
     def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
+        """MACD 계산"""
         line = PyUpbitUtils.ema(close, fast) - PyUpbitUtils.ema(close, slow)
         sig = PyUpbitUtils.ema(line, signal)
         hist = line - sig
@@ -104,6 +162,7 @@ class PyUpbitUtils:
         macd_slow: int = 26,
         macd_signal: int = 9
     ) -> Dict[str, Any]:
+        """모든 기술적 지표 계산"""
         close = df["close"]
         volume = df["volume"]
         ret = close.pct_change()
@@ -155,6 +214,7 @@ class PyUpbitUtils:
 
     @staticmethod
     def rule_signals(ind: Dict[str, Any]) -> Dict[str, Any]:
+        """거래 신호 규칙 평가"""
         sigs: Dict[str, str] = {}
 
         # 1) 모멘텀
@@ -194,3 +254,57 @@ class PyUpbitUtils:
         sells = sum(1 for v in sigs.values() if v.startswith("sell"))
         sigs["overall"] = "BUY" if buys - sells >= 2 else ("SELL" if sells - buys >= 2 else "HOLD")
         return sigs
+
+    # ---------- 추가 업비트 전용 기능 (CCXT 사용) ----------
+    async def get_ticker(self, market: str) -> Dict[str, Any]:
+        """현재 가격 정보 조회"""
+        try:
+            ticker = await run_in_threadpool(self.exchange.fetch_ticker, market)
+            if ticker is None:
+                raise ValueError(f"No ticker data for {market}")
+
+            return {
+                "symbol": ticker.get('symbol', market),
+                "last": ticker.get('last', 0),
+                "bid": ticker.get('bid', 0),
+                "ask": ticker.get('ask', 0),
+                "high": ticker.get('high', 0),
+                "low": ticker.get('low', 0),
+                "volume": ticker.get('baseVolume', 0),
+                "change": ticker.get('change', 0),
+                "change_percent": ticker.get('percentage', 0),
+                "timestamp": ticker.get('timestamp', 0)
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to fetch ticker for {market}: {str(e)}")
+
+    async def get_orderbook(self, market: str, limit: int = 20) -> Dict[str, Any]:
+        """호가창 정보 조회"""
+        try:
+            orderbook = await run_in_threadpool(self.exchange.fetch_order_book, market, limit)
+            return {
+                "symbol": market,
+                "bids": orderbook['bids'][:limit],
+                "asks": orderbook['asks'][:limit],
+                "timestamp": orderbook['timestamp']
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to fetch orderbook for {market}: {str(e)}")
+
+    async def get_recent_trades(self, market: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """최근 거래 내역 조회"""
+        try:
+            trades = await run_in_threadpool(self.exchange.fetch_trades, market, limit=limit)
+            return [
+                {
+                    "id": trade['id'],
+                    "timestamp": trade['timestamp'],
+                    "price": trade['price'],
+                    "amount": trade['amount'],
+                    "side": trade['side'],
+                    "cost": trade['cost']
+                }
+                for trade in trades
+            ]
+        except Exception as e:
+            raise ValueError(f"Failed to fetch trades for {market}: {str(e)}")

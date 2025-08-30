@@ -4,41 +4,67 @@ from typing import Dict, Any, List, Literal, Optional, Tuple
 from datetime import datetime
 import pandas as pd
 
-from src.common.utils.upbit import PyUpbitUtils
+from src.common.utils.bitcoin.exchange_interface import ExchangeFactory, Timeframe
 
-
-Timeframe = Literal[
-    "days",
-    "minutes:1","minutes:3","minutes:5","minutes:10","minutes:15","minutes:30","minutes:60","minutes:240"
-]
 
 class ChartService:
-    def __init__(self):
-        self.pyupbit_utils = PyUpbitUtils()
+    def __init__(self, exchange_type: str = "binance", api_key: str | None = None, secret: str | None = None, testnet: bool = False):
+        """
+        거래소를 선택할 수 있는 차트 서비스
+
+        Args:
+            exchange_type: 'upbit' 또는 'binance'
+            api_key: API 키 (바이낸스만 해당)
+            secret: 시크릿 키 (바이낸스만 해당)
+            testnet: 테스트넷 사용 여부 (바이낸스만 해당)
+        """
+        self.exchange_type = exchange_type.lower()
+        self.exchange = ExchangeFactory.create_exchange(
+            exchange_type=exchange_type,
+            api_key=api_key,
+            secret=secret,
+            testnet=testnet
+        )
+
+    # ---- 거래소 정보 ----
+    def get_exchange_info(self) -> Dict[str, Any]:
+        """현재 선택된 거래소 정보 반환"""
+        return ExchangeFactory.get_exchange_info(self.exchange_type)
+
+    def get_supported_exchanges(self) -> List[str]:
+        """지원하는 거래소 목록 반환"""
+        return ExchangeFactory.get_supported_exchanges()
 
     # ---- health ----
     async def get_chart_health(self) -> Dict[str, Any]:
-        return await self.pyupbit_utils.get_chart_health()
+        """거래소 헬스체크"""
+        health = await self.exchange.get_chart_health()
+        health["exchange_type"] = self.exchange_type
+        return health
 
     # ---- 데이터 조회 ----
     async def get_candles(self, market: str, tf: Timeframe = "minutes:60", count: int = 200) -> pd.DataFrame:
         """
         원시 캔들 DataFrame 반환 (index: timestamp, cols: open/high/low/close/volume)
         """
-        return await self.pyupbit_utils.get_ohlcv_df(market, tf, count)
+        return await self.exchange.get_ohlcv_df(market, tf, count)
 
     # ---- 지표 계산(전체) ----
     def compute_indicators(
         self,
         df: pd.DataFrame,
-        momentum_window: int = 20, vol_window: int = 20,
-        rsi_period: int = 14, bb_period: int = 20,
-        macd_fast: int = 12, macd_slow: int = 26, macd_signal: int = 9
+        momentum_window: int = 20,
+        vol_window: int = 20,
+        rsi_period: int = 14,
+        bb_period: int = 20,
+        macd_fast: int = 12,
+        macd_slow: int = 26,
+        macd_signal: int = 9
     ) -> Dict[str, Any]:
         """
         하나의 DataFrame으로 모든 지표를 계산해서 dict로 반환
         """
-        return self.pyupbit_utils.compute_indicators(
+        return self.exchange.compute_indicators(
             df,
             momentum_window=momentum_window, vol_window=vol_window,
             rsi_period=rsi_period, bb_period=bb_period,
@@ -50,7 +76,7 @@ class ChartService:
         """
         요구한 6가지 규칙을 한 번에 평가 (rule1~rule6 + overall)
         """
-        return self.pyupbit_utils.rule_signals(indicators)
+        return self.exchange.rule_signals(indicators)
 
     # ---- 전체 시그널(데이터 획득 + 지표 + 규칙) ----
     async def get_overall_signals(
@@ -74,6 +100,7 @@ class ChartService:
         )
         rules = self.evaluate_rules(ind)
         return {
+            "exchange": self.exchange_type,
             "market": market,
             "timeframe": tf,
             "count": count,
@@ -114,6 +141,7 @@ class ChartService:
         if name not in ind:
             raise ValueError(f"Unknown indicator: {name}")
         return {
+            "exchange": self.exchange_type,
             "market": market,
             "timeframe": tf,
             "asof": ind.get("time"),
@@ -145,6 +173,7 @@ class ChartService:
         if rule not in rules:
             raise ValueError(f"Unknown rule: {rule}")
         return {
+            "exchange": self.exchange_type,
             "market": market,
             "timeframe": tf,
             "asof": ind.get("time"),
@@ -165,6 +194,7 @@ class ChartService:
         ind = self.compute_indicators(df)
         rules = self.evaluate_rules(ind)
         return {
+            "exchange": self.exchange_type,
             "market": market,
             "timeframe": tf,
             "asof": ind.get("time"),
@@ -174,3 +204,23 @@ class ChartService:
             "macd_cross": {"value": ind.get("macd_cross"), "signal": rules.get("rule6_macd")},
             "overall": rules.get("overall")
         }
+
+    # ---- 추가 거래소 기능 ----
+    async def get_ticker(self, market: str) -> Dict[str, Any]:
+        """현재 가격 정보 조회"""
+        ticker = await self.exchange.get_ticker(market)
+        ticker["exchange"] = self.exchange_type
+        return ticker
+
+    async def get_orderbook(self, market: str, limit: int = 20) -> Dict[str, Any]:
+        """호가창 정보 조회"""
+        orderbook = await self.exchange.get_orderbook(market, limit)
+        orderbook["exchange"] = self.exchange_type
+        return orderbook
+
+    async def get_recent_trades(self, market: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """최근 거래 내역 조회"""
+        trades = await self.exchange.get_recent_trades(market, limit)
+        for trade in trades:
+            trade["exchange"] = self.exchange_type
+        return trades
