@@ -5,6 +5,7 @@ from datetime import datetime
 import pandas as pd
 
 from src.common.utils.bitcoin.exchange_interface import ExchangeFactory, Timeframe
+from .database import get_mongodb_service
 
 
 class ChartService:
@@ -108,6 +109,263 @@ class ChartService:
             "indicators": ind,
             "signals": rules
         }
+
+    # ---- 거래 신호 조회 (에이전트용 상세 데이터 + MongoDB 저장) ----
+    async def get_trading_signal_with_storage(
+        self,
+        market: str,
+        tf: Timeframe = "minutes:60",
+        count: int = 200,
+        momentum_window: int = 20, vol_window: int = 20,
+        rsi_period: int = 14, bb_period: int = 20,
+        macd_fast: int = 12, macd_slow: int = 26, macd_signal: int = 9,
+        save_to_db: bool = True
+    ) -> Dict[str, Any]:
+        """
+        거래 신호 조회 + MongoDB 저장 (에이전트용)
+
+        Args:
+            market: 거래 시장
+            tf: 시간프레임
+            count: 캔들 개수
+            momentum_window: 모멘텀 윈도우
+            vol_window: 거래량 윈도우
+            rsi_period: RSI 기간
+            bb_period: 볼린저 밴드 기간
+            macd_fast: MACD 빠른 이동평균
+            macd_slow: MACD 느린 이동평균
+            macd_signal: MACD 시그널
+            save_to_db: MongoDB 저장 여부
+
+        Returns:
+            모든 데이터를 포함한 거래 신호 정보
+        """
+        try:
+            # 캔들 데이터 조회
+            df = await self.get_candles(market, tf, count)
+
+            # 지표 계산
+            indicators = self.compute_indicators(
+                df,
+                momentum_window=momentum_window, vol_window=vol_window,
+                rsi_period=rsi_period, bb_period=bb_period,
+                macd_fast=macd_fast, macd_slow=macd_slow, macd_signal=macd_signal
+            )
+
+            # 규칙 평가
+            rule_evaluation = self.evaluate_rules(indicators)
+
+            # 현재 가격 (최신 종가)
+            current_price = float(indicators.get("close", 0))
+
+            # 종합 신호
+            overall_signal = rule_evaluation.get("overall", "HOLD")
+
+            # 사용된 파라미터
+            parameters = {
+                "timeframe": tf,
+                "count": count,
+                "momentum_window": momentum_window,
+                "vol_window": vol_window,
+                "rsi_period": rsi_period,
+                "bb_period": bb_period,
+                "macd_fast": macd_fast,
+                "macd_slow": macd_slow,
+                "macd_signal": macd_signal
+            }
+
+            # MongoDB에 저장
+            if save_to_db:
+                try:
+                    mongodb = await get_mongodb_service()
+                    await mongodb.save_trading_signal_with_details(
+                        exchange=self.exchange_type,
+                        market=market,
+                        timeframe=tf,
+                        current_price=current_price,
+                        overall_signal=overall_signal,
+                        indicators=indicators,
+                        rule_evaluation=rule_evaluation,
+                        parameters=parameters,
+                        metadata={
+                            "service_version": "1.0.0",
+                            "data_source": "ccxt",
+                            "calculation_method": "technical_analysis"
+                        }
+                    )
+                except Exception as e:
+                    print(f"⚠️ MongoDB 저장 실패 (계속 진행): {e}")
+
+            # 에이전트용 상세 응답 구성
+            response = {
+                # 기본 정보
+                "exchange": self.exchange_type,
+                "market": market,
+                "current_price": current_price,
+                "overall_signal": overall_signal,
+                "timeframe": tf,
+                "timestamp": indicators.get("time", datetime.utcnow()),
+
+                # 상세 지표 데이터 (에이전트용)
+                "indicators": indicators,
+                "rule_evaluation": rule_evaluation,
+                "signal_details": {
+                    "signal_strength": self._calculate_signal_strength(indicators, rule_evaluation),
+                    "confidence_level": self._calculate_confidence_level(rule_evaluation),
+                    "trend_direction": self._determine_trend_direction(indicators),
+                    "volatility_level": self._calculate_volatility_level(indicators)
+                },
+
+                # 파라미터 정보
+                "parameters_used": parameters,
+
+                # 메타데이터
+                "metadata": {
+                    "candles_count": len(df),
+                    "calculation_time": datetime.utcnow().isoformat(),
+                    "exchange_type": self.exchange_type,
+                    "data_quality": "high" if len(df) >= count else "partial"
+                }
+            }
+
+            return response
+
+        except Exception as e:
+            print(f"❌ 거래 신호 조회 실패: {e}")
+            raise
+
+    def _calculate_signal_strength(self, indicators: Dict[str, Any], rule_evaluation: Dict[str, Any]) -> float:
+        """신호 강도 계산 (0-100)"""
+        try:
+            # RSI 기반 강도
+            rsi_strength = 0
+            if "rsi" in indicators:
+                rsi = indicators["rsi"]
+                if rsi <= 20 or rsi >= 80:
+                    rsi_strength = 100
+                elif rsi <= 30 or rsi >= 70:
+                    rsi_strength = 80
+                elif rsi <= 40 or rsi >= 60:
+                    rsi_strength = 60
+                else:
+                    rsi_strength = 40
+
+            # 볼린저 밴드 기반 강도
+            bb_strength = 0
+            if "bb_pct_b" in indicators:
+                bb_pct_b = indicators["bb_pct_b"]
+                if bb_pct_b <= 0.1 or bb_pct_b >= 0.9:
+                    bb_strength = 100
+                elif bb_pct_b <= 0.2 or bb_pct_b >= 0.8:
+                    bb_strength = 80
+                elif bb_pct_b <= 0.3 or bb_pct_b >= 0.7:
+                    bb_strength = 60
+                else:
+                    bb_strength = 40
+
+            # MACD 기반 강도
+            macd_strength = 0
+            if "macd_cross" in indicators:
+                macd_cross = indicators["macd_cross"]
+                if macd_cross in ["bullish", "bearish"]:
+                    macd_strength = 80
+                else:
+                    macd_strength = 40
+
+            # 종합 강도 계산
+            total_strength = (rsi_strength + bb_strength + macd_strength) / 3
+            return round(total_strength, 2)
+
+        except Exception:
+            return 50.0  # 기본값
+
+    def _calculate_confidence_level(self, rule_evaluation: Dict[str, Any]) -> str:
+        """신뢰도 레벨 계산"""
+        try:
+            # 개별 규칙 신호 개수
+            buy_signals = 0
+            sell_signals = 0
+            neutral_signals = 0
+
+            for key, value in rule_evaluation.items():
+                if key.startswith("rule") and key != "overall":
+                    if value == "buy":
+                        buy_signals += 1
+                    elif value == "sell":
+                        sell_signals += 1
+                    else:
+                        neutral_signals += 1
+
+            total_rules = buy_signals + sell_signals + neutral_signals
+
+            if total_rules == 0:
+                return "unknown"
+
+            # 신뢰도 계산
+            if buy_signals >= 4:
+                return "very_high_buy"
+            elif sell_signals >= 4:
+                return "very_high_sell"
+            elif buy_signals >= 3:
+                return "high_buy"
+            elif sell_signals >= 3:
+                return "high_sell"
+            elif buy_signals >= 2:
+                return "medium_buy"
+            elif sell_signals >= 2:
+                return "medium_sell"
+            else:
+                return "low"
+
+        except Exception:
+            return "unknown"
+
+    def _determine_trend_direction(self, indicators: Dict[str, Any]) -> str:
+        """트렌드 방향 판단"""
+        try:
+            # 이동평균 기반 트렌드
+            sma_20 = indicators.get("sma_20")
+            close = indicators.get("close")
+
+            if sma_20 and close:
+                if close > sma_20 * 1.02:  # 2% 이상 위
+                    return "strong_uptrend"
+                elif close > sma_20:
+                    return "uptrend"
+                elif close < sma_20 * 0.98:  # 2% 이상 아래
+                    return "strong_downtrend"
+                elif close < sma_20:
+                    return "downtrend"
+                else:
+                    return "sideways"
+
+            return "unknown"
+
+        except Exception:
+            return "unknown"
+
+    def _calculate_volatility_level(self, indicators: Dict[str, Any]) -> str:
+        """변동성 레벨 계산"""
+        try:
+            # 볼린저 밴드 대역폭 기반
+            bb_bandwidth = indicators.get("bb_bandwidth")
+
+            if bb_bandwidth:
+                if bb_bandwidth >= 0.1:
+                    return "very_high"
+                elif bb_bandwidth >= 0.08:
+                    return "high"
+                elif bb_bandwidth >= 0.06:
+                    return "medium"
+                elif bb_bandwidth >= 0.04:
+                    return "low"
+                else:
+                    return "very_low"
+
+            return "unknown"
+
+        except Exception:
+            return "unknown"
 
     # ---- 개별 지표만 조회 ----
     async def get_single_indicator(

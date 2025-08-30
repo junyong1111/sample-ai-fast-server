@@ -16,7 +16,8 @@ import uvicorn
 from src.app.url import autotrading_router, blog_router
 from src.common.utils.logger import set_logger
 from src.common.error import JSendError, ErrorCode
-
+from src.app.autotrading.database import mongodb_service
+from src.config.setting import settings
 
 
 app = FastAPI(title="HTML to Image (minimal)")
@@ -26,6 +27,8 @@ app.include_router(autotrading_router.router, prefix="/autotrading")
 
 
 async def startup():
+    """애플리케이션 시작 시 실행"""
+    # Playwright 시작
     pw = await async_playwright().start()
     browser = await pw.chromium.launch(args=["--no-sandbox"])
     context = await browser.new_context(locale="ko-KR", device_scale_factor=1.0, offline=False)
@@ -33,13 +36,39 @@ async def startup():
     app.state.browser = browser
     app.state.context = context
 
-async def shutdown():
+    # MongoDB 연결
     try:
+        # 환경변수에서 MongoDB 설정 가져오기
+        mongodb_url = settings.MONGODB_URL
+        mongodb_database = settings.MONGODB_DATABASE
+
+        # MongoDB 서비스 설정 및 연결
+        mongodb_service.connection_string = mongodb_url
+        mongodb_service.database_name = mongodb_database
+        await mongodb_service.connect()
+
+        logger.info(f"✅ MongoDB 연결 성공: {mongodb_url}/{mongodb_database}")
+
+    except Exception as e:
+        logger.error(f"❌ MongoDB 연결 실패: {e}")
+        logger.warning("⚠️ MongoDB 없이 서비스가 시작됩니다. 거래 신호 저장 기능이 제한됩니다.")
+
+async def shutdown():
+    """애플리케이션 종료 시 실행"""
+    try:
+        # Playwright 종료
         await app.state.context.close()
         await app.state.browser.close()
         await app.state.pw.stop()
     except Exception:
         pass
+
+    # MongoDB 연결 해제
+    try:
+        await mongodb_service.disconnect()
+        logger.info("🔌 MongoDB 연결 해제 완료")
+    except Exception as e:
+        logger.error(f"❌ MongoDB 연결 해제 실패: {e}")
 
 # 로깅 설정
 log_dir = "../logs"
@@ -108,7 +137,8 @@ async def health_check():
         "status": "healthy",
         "service": "PDF Processing with Vector DB",
         "version": "2.0.0",
-        "global_services_initialized": global_vector_service is not None
+        "global_services_initialized": global_vector_service is not None,
+        "mongodb_connected": mongodb_service.client is not None
     }
 
 # 개발 서버 실행
