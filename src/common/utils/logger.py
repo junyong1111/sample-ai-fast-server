@@ -7,35 +7,22 @@ import time
 import traceback
 from functools import wraps
 
-from colorlog import ColoredFormatter
-
 from src.config.setting import settings
 from src.common.constants import DEFAULT_LOGGING_LEVEL
 
-ROOT_PKG = "quiz-api"
+ROOT_PKG = "sample-ai-fast-server"
 
-LOG_COLORS_CONFIG = {
-    'DEBUG':    'cyan',
-    'INFO':     'green',
-    'WARNING':  'yellow',
-    'ERROR':    'red',
-    'CRITICAL': 'bold_red',
-}
-
-# ✅ Custom Formatter (흰색 날짜 + traceback 강조)
-class CustomColoredFormatter(ColoredFormatter):
+# ✅ Custom Formatter (표준 로깅 사용)
+class CustomFormatter(logging.Formatter):
     def format(self, record):
-        # 날짜 흰색 처리
-        record.white_asctime = f"\033[37m{self.formatTime(record, self.datefmt)}\033[0m"
-
-        # traceback 색 강조
+        # traceback 색 강조 (ANSI 색상 코드 사용)
         if record.exc_info:
             record.msg = f"\033[33m{record.msg}\033[0m"  # yellow
         return super().format(record)
 
-# ✅ 콘솔 포맷 (날짜는 흰색, 로그 레벨은 레벨별 색)
+# ✅ 콘솔 포맷 (표준 로깅 사용)
 STREAM_HANDLER_FORMAT = (
-    "%(white_asctime)s | %(log_color)s%(levelname)-8s | %(name)s "
+    "%(asctime)s | %(levelname)-8s | %(name)s "
     "[%(filename)s:%(funcName)s:%(lineno)d] >> %(message)s"
 )
 
@@ -56,10 +43,9 @@ def set_logger(pkg: str, log_base_dir: str = settings.DEFAULT_LOGGING_PATH, log_
     if not logger.handlers:
         # Stream Handler
         stream_handler = logging.StreamHandler()
-        stream_formatter = CustomColoredFormatter(
+        stream_formatter = CustomFormatter(
             STREAM_HANDLER_FORMAT,
-            datefmt='%Y-%m-%d %H:%M:%S',
-            log_colors=LOG_COLORS_CONFIG
+            datefmt='%Y-%m-%d %H:%M:%S'
         )
         stream_handler.setFormatter(stream_formatter)
         logger.addHandler(stream_handler)

@@ -27,7 +27,23 @@ services:
     command: uvicorn src.app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"      # 외부 접근용
+    environment:
+      MONGODB_URL: "mongodb://devjun:X7pQa9Lm!@mongodb:27017"
+      MONGODB_DATABASE: "autotrading"
     networks: [appnet]
+
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    networks: [appnet]
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: devjun
+      MONGO_INITDB_ROOT_PASSWORD: X7pQa9Lm!
 
 networks:
   appnet:
@@ -35,3 +51,4 @@ networks:
 
 volumes:
   n8n_data:
+  mongodb_data:
