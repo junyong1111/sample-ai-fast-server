@@ -16,7 +16,7 @@ from .model import TradingSignal, TradingSignalCreate, TradingSignalQuery, Tradi
 class MongoDBService:
     """MongoDB 비동기 서비스"""
 
-    def __init__(self, connection_string: str = "mongodb://localhost:27017", database_name: str = "trading_signals"):
+    def __init__(self, connection_string: str = "mongodb://localhost:27017", database_name: str = "autotrading"):
         """
         MongoDB 서비스 초기화
 
