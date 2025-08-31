@@ -77,6 +77,10 @@ class TradingService:
             거래 실행 결과
         """
         try:
+            # 시장 심볼 정규화 (BTC → BTC/USDT)
+            if '/' not in market:
+                market = f"{market}/USDT"
+
             if signal == "HOLD":
                 return {
                     "status": "skipped",
@@ -121,6 +125,10 @@ class TradingService:
     async def get_order_status(self, order_id: str, market: str) -> Dict[str, Any]:
         """주문 상태 조회"""
         try:
+            # 시장 심볼 정규화 (BTC → BTC/USDT)
+            if '/' not in market:
+                market = f"{market}/USDT"
+
             status = await self.binance.get_order_status(order_id, market)
             return {
                 "status": "success",
@@ -137,6 +145,10 @@ class TradingService:
     async def cancel_order(self, order_id: str, market: str) -> Dict[str, Any]:
         """주문 취소"""
         try:
+            # 시장 심볼 정규화 (BTC → BTC/USDT)
+            if '/' not in market:
+                market = f"{market}/USDT"
+
             result = await self.binance.cancel_order(order_id, market)
             return {
                 "status": "success",
@@ -187,6 +199,10 @@ class TradingService:
             전략 실행 결과
         """
         try:
+            # 시장 심볼 정규화 (BTC → BTC/USDT)
+            if '/' not in market:
+                market = f"{market}/USDT"
+
             # 계정 잔고 조회
             account_info = await self.binance.get_account_info()
 

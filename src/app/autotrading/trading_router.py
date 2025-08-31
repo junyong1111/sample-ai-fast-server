@@ -21,10 +21,14 @@ chart_service = ChartService(exchange_type="binance")
     summary="계정 상태 확인",
     description="Binance 계정의 잔고 및 상태 정보를 조회합니다."
 )
-async def get_account_status():
+async def get_account_status(
+    use_testnet: bool = Query(True, description="테스트넷 사용 여부 (기본값: True)")
+):
     """계정 상태 확인"""
     try:
-        result = await trading_service.get_account_status()
+        # 테스트넷 설정에 따른 서비스 인스턴스 생성
+        trading_service_instance = TradingService(testnet=use_testnet)
+        result = await trading_service_instance.get_account_status()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -41,11 +45,15 @@ async def execute_trading_signal(
     signal: str = Query(..., description="거래 신호 (BUY/SELL/HOLD)"),
     quantity: float = Query(..., description="거래 수량"),
     order_type: Literal['market', 'limit'] = Query('market', description="주문 타입"),
-    price: Optional[float] = Query(None, description="지정가 주문 시 가격")
+    price: Optional[float] = Query(None, description="지정가 주문 시 가격"),
+    use_testnet: bool = Query(True, description="테스트넷 사용 여부 (기본값: True)")
 ):
     """거래 신호 실행"""
     try:
-        result = await trading_service.execute_trading_signal(
+        # 테스트넷 설정에 따른 서비스 인스턴스 생성
+        trading_service_instance = TradingService(testnet=use_testnet)
+
+        result = await trading_service_instance.execute_trading_signal(
             market=market,
             signal=signal,
             quantity=quantity,
@@ -152,18 +160,24 @@ async def get_open_orders(
     summary="연결 테스트",
     description="Binance API 연결 상태를 테스트합니다."
 )
-async def test_connection():
+async def test_connection(
+    use_testnet: bool = Query(True, description="테스트넷 사용 여부 (기본값: True)")
+):
     """연결 테스트"""
     try:
+        # 테스트넷 설정에 따른 서비스 인스턴스 생성
+        trading_service_instance = TradingService(testnet=use_testnet)
+        chart_service_instance = ChartService(exchange_type="binance", testnet=use_testnet)
+
         # Binance 연결 테스트
-        health_check = await chart_service.exchange.get_chart_health()
+        health_check = await chart_service_instance.exchange.get_chart_health()
 
         # 계정 상태 테스트
-        account_status = await trading_service.get_account_status()
+        account_status = await trading_service_instance.get_account_status()
 
         return {
             "status": "success",
-            "testnet": True,
+            "testnet": use_testnet,
             "binance_connection": health_check,
             "account_status": account_status,
             "timestamp": health_check.get("now_utc")
@@ -171,7 +185,7 @@ async def test_connection():
     except Exception as e:
         return {
             "status": "error",
-            "testnet": True,
+            "testnet": use_testnet,
             "error": str(e),
             "timestamp": None
         }

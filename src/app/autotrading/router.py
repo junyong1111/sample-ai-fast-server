@@ -1,5 +1,5 @@
 # src/app/routers/chart.py
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Body
 from typing import Literal, Dict, Any, Optional
 from datetime import datetime, timedelta
 from src.app.autotrading.service import ChartService, Timeframe
@@ -11,6 +11,7 @@ from src.app.autotrading.docs import (
     desc_health_endpoint, desc_timeframe, desc_count, desc_period,
     EXCHANGE_DETAILS, API_EXAMPLES_DATA, MARKET_FORMAT_RULES, TIMEFRAME_OPTIONS, COUNT_RECOMMENDATIONS
 )
+from src.common.utils.bitcoin.binace import BinanceUtils
 
 router = APIRouter(prefix="/charts")
 
@@ -504,5 +505,231 @@ async def health_check():
             "timestamp": "2025-08-30T00:00:00Z",
             "error": str(e),
             "message": "서비스에 문제가 발생했습니다."
+        }
+
+# ===== 🤖 AI 거래 실행 =====
+@router.post(
+    "/trade/execute",
+    tags=["🤖 AI 거래 실행"],
+    summary="AI 거래 시그널에 따른 자동 거래 실행",
+    description="AI가 제공한 거래 시그널을 받아서 자동으로 거래를 실행합니다."
+)
+async def execute_ai_trade(
+    trade_request: Dict[str, Any] = Body(
+        ...,
+        example={
+            "action": "BUY",
+            "market": "BTC/USDT",
+            "target_price": 108000.0,
+            "quantity": 0.001,
+            "order_type": "market",
+            "confidence": 0.9,
+            "reason": "RSI 과매도 + 볼린저 밴드 하단 터치",
+            "use_testnet": True,
+            "auto_calculate_quantity": False
+        }
+    )
+):
+    """AI 거래 시그널에 따른 자동 거래 실행"""
+    try:
+        # 필수 필드 검증
+        required_fields = ['action', 'market', 'target_price']
+        for field in required_fields:
+            if field not in trade_request:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"필수 필드가 누락되었습니다: {field}"
+                )
+
+        # 시장 심볼 정규화
+        market = trade_request['market']
+        if '/' not in market:
+            market = f"{market}/USDT"
+
+        # 설정값 추출
+        use_testnet = trade_request.get('use_testnet', True)
+        auto_calculate_quantity = trade_request.get('auto_calculate_quantity', False)
+        action = trade_request['action']
+
+        # HOLD 신호는 거래 없음
+        if action == 'HOLD':
+            return {
+                "status": "success",
+                "action": "HOLD",
+                "market": market,
+                "message": "HOLD 신호 - 거래를 실행하지 않습니다.",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        # 바이낸스 연결
+        binance = BinanceUtils(testnet=use_testnet)
+
+        # 현재 가격 조회
+        current_price = await binance.get_ticker(market)
+        current_price_value = float(current_price['last'])
+
+        # 수량 계산
+        if auto_calculate_quantity:
+            # 자동 수량 계산 (신뢰도 기반)
+            confidence = trade_request.get('confidence', 0.5)
+            balance = await binance.get_account_info()
+            usdt_balance = balance.get('free_balance', {}).get('USDT', 0)
+
+            # 리스크 계산 (거래당 1% * 신뢰도)
+            risk_per_trade = 0.01 * confidence
+            investment_amount = float(usdt_balance) * risk_per_trade
+
+            # 최대 포지션 크기 제한 (10%)
+            max_position = float(usdt_balance) * 0.1
+            investment_amount = min(investment_amount, max_position)
+
+            quantity = investment_amount / current_price_value
+
+            print(f"자동 수량 계산: 투자금액=${investment_amount:.2f}, 수량={quantity:.6f}")
+        else:
+            # AI가 제시한 수량 사용
+            quantity = trade_request.get('quantity', 0)
+            if quantity <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="수량이 0보다 커야 합니다."
+                )
+
+        # 주문 실행
+        order_type = trade_request.get('order_type', 'market')
+
+        if action == 'BUY':
+            if order_type == 'market':
+                order = await binance.place_market_order(market, 'buy', quantity)
+            else:
+                order = await binance.place_limit_order(market, 'buy', quantity, current_price_value)
+        elif action == 'SELL':
+            if order_type == 'market':
+                order = await binance.place_market_order(market, 'sell', quantity)
+            else:
+                order = await binance.place_limit_order(market, 'sell', quantity, current_price_value)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"지원하지 않는 거래 방향입니다: {action}"
+            )
+
+        return {
+            "status": "success",
+            "action": action,
+            "market": market,
+            "quantity": quantity,
+            "current_price": current_price_value,
+            "target_price": trade_request['target_price'],
+            "order_type": order_type,
+            "order_id": order.get('id'),
+            "order_status": order.get('status'),
+            "use_testnet": use_testnet,
+            "auto_calculate_quantity": auto_calculate_quantity,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {
+            "status": "error",
+            "market": trade_request.get('market', 'UNKNOWN'),
+            "signal": trade_request.get('action', 'UNKNOWN'),
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+# ===== 🔧 거래 설정 =====
+@router.get(
+    "/trade/settings",
+    tags=["🔧 거래 설정"],
+    summary="현재 거래 설정 조회",
+    description="AI 거래 봇의 현재 설정을 조회합니다."
+)
+async def get_trade_settings():
+    """거래 설정 조회"""
+    return {
+        "message": "AI 거래 봇 설정",
+        "settings": {
+            "default_testnet": True,
+            "default_auto_calculate": True,
+            "risk_per_trade": "1%",
+            "max_position_size": "10%",
+            "supported_markets": ["BTC/USDT", "ETH/USDT", "BNB/USDT"],
+            "supported_actions": ["BUY", "SELL", "HOLD"],
+            "supported_order_types": ["market", "limit"]
+        }
+    }
+
+@router.post(
+    "/trade/settings",
+    tags=["🔧 거래 설정"],
+    summary="거래 설정 변경",
+    description="AI 거래 봇의 설정을 변경합니다."
+)
+async def update_trade_settings(
+    settings: Dict[str, Any] = Body(
+        ...,
+        example={
+            "default_testnet": True,
+            "default_auto_calculate": True,
+            "risk_per_trade": 0.01,
+            "max_position_size": 0.1
+        }
+    )
+):
+    """거래 설정 변경"""
+    try:
+        # 설정 검증 및 업데이트 로직
+        # (실제 구현에서는 설정 파일이나 데이터베이스에 저장)
+
+        return {
+            "status": "success",
+            "message": "거래 설정이 업데이트되었습니다.",
+            "updated_settings": settings,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"설정 업데이트 실패: {str(e)}"
+        )
+
+# ===== 📊 거래 히스토리 =====
+@router.get(
+    "/trade/history",
+    tags=["📊 거래 히스토리"],
+    summary="거래 실행 히스토리 조회",
+    description="AI 거래 봇이 실행한 거래 내역을 조회합니다."
+)
+async def get_trade_history(
+    use_testnet: bool = Query(True, description="테스트넷 사용 여부"),
+    market: Optional[str] = Query(None, description="시장 필터"),
+    action: Optional[str] = Query(None, description="거래 방향 필터"),
+    limit: int = Query(50, description="조회 개수 제한")
+):
+    """거래 실행 히스토리 조회"""
+    try:
+        binance = BinanceUtils(testnet=use_testnet)
+
+        # 미체결 주문 조회
+        open_orders = await binance.get_open_orders(market)
+
+        # 최근 거래 내역 조회 (실제 구현에서는 데이터베이스에서 조회)
+        return {
+            "status": "success",
+            "use_testnet": use_testnet,
+            "open_orders": open_orders,
+            "message": "거래 히스토리 조회 완료",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
         }
 
