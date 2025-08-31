@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Literal, List
+from typing import Dict, Any, Literal, List, Union
 from datetime import datetime, timezone
 import ccxt
 from fastapi.concurrency import run_in_threadpool
@@ -22,28 +22,46 @@ INTERVAL_MAP = {
 
 
 class BinanceUtils:
-    def __init__(self, api_key: str | None = None, secret: str | None = None, testnet: bool = False):
+    def __init__(self, api_key: str | None = None, secret: str | None = None, testnet: bool = True):
         """
         바이낸스 API 유틸리티 클래스
 
         Args:
             api_key: 바이낸스 API 키 (선택사항)
             secret: 바이낸스 시크릿 키 (선택사항)
-            testnet: 테스트넷 사용 여부 (기본값: False)
+            testnet: 테스트넷 사용 여부 (기본값: True - 안전을 위해)
         """
-        self.api_key = api_key
-        self.secret = secret
+        import os
+
+        # 환경변수에서 API 키 가져오기 (testnet 우선)
+        if testnet:
+            self.api_key = api_key or os.getenv('BINANCE_TESTNET_API_KEY', '')
+            self.secret = secret or os.getenv('BINANCE_TESTNET_SECRET_KEY', '')
+        else:
+            self.api_key = api_key or os.getenv('BINANCE_API_KEY', '')
+            self.secret = secret or os.getenv('BINANCE_SECRET_KEY', '')
+
         self.testnet = testnet
 
         # CCXT를 사용하여 바이낸스 연결
-        config = {'enableRateLimit': True}
-        if api_key:
-            config['apiKey'] = api_key
-        if secret:
-            config['secret'] = secret
+        config = {
+            'enableRateLimit': True,
+            'sandbox': testnet,  # testnet 모드 활성화
+        }
 
+        if self.api_key:
+            config['apiKey'] = self.api_key
+        if self.secret:
+            config['secret'] = self.secret
+
+        # 바이낸스 testnet 설정
         if testnet:
-            config['sandbox'] = True
+            config['urls'] = {
+                'api': {
+                    'public': 'https://testnet.binance.vision/api',
+                    'private': 'https://testnet.binance.vision/api',
+                }
+            }
 
         self.exchange = ccxt.binance(config)  # type: ignore
 
@@ -335,3 +353,133 @@ class BinanceUtils:
             ]
         except Exception as e:
             raise ValueError(f"Failed to fetch trades for {market}: {str(e)}")
+
+    # ---------- 거래 기능 (매매) ----------
+    async def get_account_info(self) -> Dict[str, Any]:
+        """계정 정보 조회"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for account operations")
+
+            account = await run_in_threadpool(self.exchange.fetch_balance)
+            return {
+                "total_balance": account.get('total', {}),
+                "free_balance": account.get('free', {}),
+                "used_balance": account.get('used', {}),
+                "info": account.get('info', {})
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to fetch account info: {str(e)}")
+
+    async def place_market_order(self, market: str, side: Literal['buy', 'sell'], quantity: float) -> Dict[str, Any]:
+        """시장가 주문 실행"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for trading")
+
+            order = await run_in_threadpool(
+                self.exchange.create_market_order,
+                market, side, quantity
+            )
+
+            return {
+                "order_id": order.get('id'),
+                "symbol": order.get('symbol'),
+                "side": order.get('side'),
+                "type": order.get('type'),
+                "amount": order.get('amount'),
+                "cost": order.get('cost'),
+                "status": order.get('status'),
+                "timestamp": order.get('timestamp')
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to place market order: {str(e)}")
+
+    async def place_limit_order(self, market: str, side: Literal['buy', 'sell'], quantity: float, price: float) -> Dict[str, Any]:
+        """지정가 주문 실행"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for trading")
+
+            order = await run_in_threadpool(
+                self.exchange.create_limit_order,
+                market, side, quantity, price
+            )
+
+            return {
+                "order_id": order.get('id'),
+                "symbol": order.get('symbol'),
+                "side": order.get('side'),
+                "type": order.get('type'),
+                "amount": order.get('amount'),
+                "price": order.get('price'),
+                "status": order.get('status'),
+                "timestamp": order.get('timestamp')
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to place limit order: {str(e)}")
+
+    async def get_order_status(self, order_id: str, market: str) -> Dict[str, Any]:
+        """주문 상태 조회"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for order operations")
+
+            order = await run_in_threadpool(self.exchange.fetch_order, order_id, market)
+
+            return {
+                "order_id": order.get('id'),
+                "symbol": order.get('symbol'),
+                "side": order.get('side'),
+                "type": order.get('type'),
+                "amount": order.get('amount'),
+                "price": order.get('price'),
+                "status": order.get('status'),
+                "filled": order.get('filled'),
+                "remaining": order.get('remaining'),
+                "cost": order.get('cost'),
+                "timestamp": order.get('timestamp')
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to fetch order status: {str(e)}")
+
+    async def cancel_order(self, order_id: str, market: str) -> Dict[str, Any]:
+        """주문 취소"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for order operations")
+
+            result = await run_in_threadpool(self.exchange.cancel_order, order_id, market)
+
+            return {
+                "order_id": result.get('id'),
+                "symbol": result.get('symbol'),
+                "status": "canceled",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to cancel order: {str(e)}")
+
+    async def get_open_orders(self, market: Union[str, None] = None) -> List[Dict[str, Any]]:
+        """미체결 주문 조회"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for order operations")
+
+            orders = await run_in_threadpool(self.exchange.fetch_open_orders, market)
+
+            return [
+                {
+                    "order_id": order.get('id'),
+                    "symbol": order.get('symbol'),
+                    "side": order.get('side'),
+                    "type": order.get('type'),
+                    "amount": order.get('amount'),
+                    "price": order.get('price'),
+                    "status": order.get('status'),
+                    "timestamp": order.get('timestamp')
+                }
+                for order in orders
+            ]
+        except Exception as e:
+            raise ValueError(f"Failed to fetch open orders: {str(e)}")

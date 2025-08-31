@@ -4,7 +4,7 @@
 
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
-from src.app.url import blog_router, autotrading_router
+from src.app.url import blog_router, autotrading_router, trading_router
 import logging
 import os
 import traceback
@@ -18,12 +18,6 @@ from src.common.utils.logger import set_logger
 from src.common.error import JSendError, ErrorCode
 from src.app.autotrading.database import mongodb_service
 from src.config.setting import settings
-
-
-app = FastAPI(title="HTML to Image (minimal)")
-
-app.include_router(blog_router.router, prefix="/blog")
-app.include_router(autotrading_router.router, prefix="/autotrading")
 
 
 async def startup():
@@ -115,6 +109,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.include_router(autotrading_router.router, prefix="/api/v1/autotrading")
+app.include_router(blog_router.router, prefix="/api/v1/blog")
+app.include_router(trading_router.router, prefix="/api/v1/autotrading/trading")
+
+
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -123,12 +122,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 라우터 등록
-# app.include_router(router, prefix="/api/v2/test")
-app.include_router(autotrading_router.router, prefix="/api/v1/autotrading")
-app.include_router(blog_router.router, prefix="/api/v1/blog")
-
 
 @app.get("/health")
 async def health_check():
@@ -143,11 +136,11 @@ async def health_check():
 
 # 개발 서버 실행
 if __name__ == "__main__":
-    logger.info("🎯 서버 시작: http://localhost:7000")
+    logger.info("🎯 서버 시작: http://localhost:8080")
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=7000,
+        port=8080,
         reload=True,
         log_level="info"
     )
