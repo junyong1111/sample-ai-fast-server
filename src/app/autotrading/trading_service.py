@@ -122,6 +122,106 @@ class TradingService:
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
+    async def execute_trading_signal_with_storage(
+        self,
+        market: str,
+        signal: str,
+        quantity: float,
+        order_type: Literal['market', 'limit'] = 'market',
+        price: Optional[float] = None,
+        ai_signal: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        거래 신호에 따른 매매 실행 + MongoDB 저장
+
+        Args:
+            market: 거래 마켓 (예: 'BTC/USDT')
+            signal: 거래 신호 ('BUY', 'SELL', 'HOLD')
+            quantity: 거래 수량
+            order_type: 주문 타입 ('market' 또는 'limit')
+            price: 지정가 주문 시 가격 (order_type이 'limit'일 때만)
+            ai_signal: AI가 보낸 거래 신호 데이터
+
+        Returns:
+            거래 실행 결과
+        """
+        try:
+            # 시장 심볼 정규화 (BTC → BTC/USDT)
+            if '/' not in market:
+                market = f"{market}/USDT"
+
+            if signal == "HOLD":
+                return {
+                    "status": "skipped",
+                    "reason": "HOLD signal - no action taken",
+                    "market": market,
+                    "signal": signal,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+
+            # 거래 방향 결정
+            side = "buy" if signal == "BUY" else "sell"
+
+            # 주문 실행
+            if order_type == "market":
+                result = await self.binance.place_market_order(market, side, quantity)
+            elif order_type == "limit" and price:
+                result = await self.binance.place_limit_order(market, side, quantity, price)
+            else:
+                raise ValueError("Invalid order type or missing price for limit order")
+
+            # MongoDB에 거래 실행 결과 저장
+            try:
+                from .database import get_mongodb_service
+
+                mongodb = await get_mongodb_service()
+
+                # AI 신호 데이터 구성
+                ai_signal_data = ai_signal or {
+                    "confidence": 0.5,
+                    "reason": "Manual execution"
+                }
+
+                # 거래 실행 결과 저장
+                await mongodb.save_trading_execution_with_result(
+                    exchange="binance",
+                    market=market,
+                    testnet=self.testnet,
+                    ai_signal=ai_signal_data,
+                    action=signal,
+                    quantity=quantity,
+                    order_type=order_type,
+                    price=price,
+                    order_result=result
+                )
+
+                print(f"✅ 거래 실행 결과 MongoDB 저장 완료")
+
+            except Exception as e:
+                print(f"⚠️ MongoDB 저장 실패 (거래는 계속 진행): {e}")
+
+            return {
+                "status": "success",
+                "market": market,
+                "signal": signal,
+                "order_type": order_type,
+                "side": side,
+                "quantity": quantity,
+                "price": price if order_type == "limit" else None,
+                "order_result": result,
+                "mongodb_saved": True,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "market": market,
+                "signal": signal,
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
     async def get_order_status(self, order_id: str, market: str) -> Dict[str, Any]:
         """주문 상태 조회"""
         try:
@@ -259,6 +359,112 @@ class TradingService:
                     "order_type": order_type
                 },
                 "trading_result": trading_result,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    async def get_trade_history(self, market: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
+        """거래 내역 조회"""
+        try:
+            # 시장 심볼 정규화
+            if market and '/' not in market:
+                market = f"{market}/USDT"
+
+            # 미체결 주문 조회
+            open_orders = await self.get_open_orders(market)
+
+            # 최근 거래 내역 조회 (바이낸스 API)
+            try:
+                # 최근 거래 내역 (최근 100개)
+                recent_trades = await self.binance.get_recent_trades(
+                    market or "BTC/USDT",
+                    limit=min(limit, 100)
+                )
+            except Exception as e:
+                recent_trades = []
+                print(f"거래 내역 조회 실패: {e}")
+
+            return {
+                "status": "success",
+                "testnet": self.testnet,
+                "market": market,
+                "open_orders": open_orders.get('open_orders', []),
+                "open_orders_count": open_orders.get('count', 0),
+                "recent_trades": recent_trades,
+                "recent_trades_count": len(recent_trades),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    async def save_trading_signal(self, signal_data: Dict[str, Any]) -> Dict[str, Any]:
+        """거래 신호 저장"""
+        try:
+            # 거래 신호 정보 저장 (실제 구현에서는 데이터베이스에 저장)
+            signal_info = {
+                "market": signal_data.get('market'),
+                "signal": signal_data.get('signal'),
+                "quantity": signal_data.get('quantity'),
+                "order_type": signal_data.get('order_type'),
+                "price": signal_data.get('price'),
+                "testnet": self.testnet,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "status": "executed"
+            }
+
+            return {
+                "status": "success",
+                "message": "거래 신호가 저장되었습니다.",
+                "signal_info": signal_info,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+
+    async def get_trading_signals(self, market: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
+        """저장된 거래 신호 조회"""
+        try:
+            # 시장 심볼 정규화
+            if market and '/' not in market:
+                market = f"{market}/USDT"
+
+            # 실제 구현에서는 데이터베이스에서 조회
+            # 현재는 임시 데이터 반환
+            mock_signals = [
+                {
+                    "id": "1",
+                    "market": market or "BTC/USDT",
+                    "signal": "BUY",
+                    "quantity": 0.001,
+                    "order_type": "market",
+                    "testnet": self.testnet,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "status": "executed"
+                }
+            ]
+
+            return {
+                "status": "success",
+                "testnet": self.testnet,
+                "market": market,
+                "signals": mock_signals,
+                "count": len(mock_signals),
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
 

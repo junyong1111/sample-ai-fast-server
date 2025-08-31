@@ -336,14 +336,23 @@ async def get_trading_signal_history(
     try:
         mongodb = await get_mongodb_service()
 
+        # 시장 심볼 정규화 (BTC → BTC/USDT)
+        normalized_market = market
+        if market and exchange == "binance" and "/" not in market:
+            normalized_market = f"{market}/USDT"
+        elif market and exchange == "upbit" and not market.startswith("KRW-"):
+            normalized_market = f"KRW-{market}"
+
         # 쿼리 조건 구성
         query = TradingSignalQuery(
             exchange=exchange,
-            market=market,
+            market=normalized_market,
             timeframe=timeframe,
             signal=signal,
             limit=min(limit, 1000),  # 최대 1000개로 제한
-            skip=skip
+            skip=skip,
+            start_date=None,
+            end_date=None
         )
 
         signals = await mongodb.get_trading_signals(query)

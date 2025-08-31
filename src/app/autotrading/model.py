@@ -124,3 +124,126 @@ class TradingSignalStats(BaseModel):
     daily_distribution: Optional[Dict[str, int]] = Field(None, description="일별 분포")
 
 
+class TradingExecution(BaseModel):
+    """거래 실행 결과 모델"""
+
+    # 기본 정보
+    exchange: str = Field(..., description="거래소 (upbit/binance)")
+    market: str = Field(..., description="거래 시장 (예: BTC/USDT)")
+    testnet: bool = Field(..., description="테스트넷 사용 여부")
+
+    # AI 신호 정보
+    ai_signal: Dict[str, Any] = Field(..., description="AI가 보낸 거래 신호")
+    signal_confidence: Optional[float] = Field(None, description="AI 신호 신뢰도")
+    signal_reason: Optional[str] = Field(None, description="AI 신호 이유")
+
+    # 거래 실행 정보
+    action: str = Field(..., description="거래 방향 (BUY/SELL/HOLD)")
+    quantity: float = Field(..., description="거래 수량")
+    order_type: str = Field(..., description="주문 타입 (market/limit)")
+    price: Optional[float] = Field(None, description="거래 가격")
+
+    # 거래 결과
+    order_id: Optional[str] = Field(None, description="주문 ID")
+    order_status: Optional[str] = Field(None, description="주문 상태")
+    execution_price: Optional[float] = Field(None, description="실행 가격")
+    execution_time: Optional[datetime] = Field(None, description="실행 시간")
+
+    # 타임스탬프
+    timestamp: datetime = Field(..., description="거래 신호 생성 시간")
+    executed_at: Optional[datetime] = Field(None, description="거래 실행 시간")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="DB 저장 시간")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class TradingExecutionCreate(BaseModel):
+    """거래 실행 결과 생성용 모델"""
+
+    exchange: str
+    market: str
+    testnet: bool
+    ai_signal: Dict[str, Any]
+    action: str
+    quantity: float
+    order_type: str
+    price: Optional[float] = None
+    signal_confidence: Optional[float] = None
+    signal_reason: Optional[str] = None
+
+
+class TradingExecutionQuery(BaseModel):
+    """거래 실행 결과 조회용 쿼리 모델"""
+
+    exchange: Optional[str] = Field(None, description="거래소 필터")
+    market: Optional[str] = Field(None, description="시장 필터")
+    testnet: Optional[bool] = Field(None, description="테스트넷 사용 여부")
+    action: Optional[str] = Field(None, description="거래 방향 필터")
+    order_type: Optional[str] = Field(None, description="주문 타입 필터")
+    start_date: Optional[datetime] = Field(None, description="시작 날짜")
+    end_date: Optional[datetime] = Field(None, description="종료 날짜")
+    limit: int = Field(default=100, description="조회 개수 제한")
+    skip: int = Field(default=0, description="건너뛸 개수")
+
+
+class TradingExecutionStats(BaseModel):
+    """거래 실행 결과 통계 모델"""
+
+    total_executions: int = Field(..., description="총 실행 개수")
+    action_distribution: Dict[str, int] = Field(..., description="거래 방향별 분포")
+    order_type_distribution: Dict[str, int] = Field(..., description="주문 타입별 분포")
+    testnet_distribution: Dict[str, int] = Field(..., description="테스트넷/메인넷 분포")
+
+    # 성공률 통계
+    success_rate: Optional[float] = Field(None, description="거래 성공률")
+    avg_confidence: Optional[float] = Field(None, description="평균 신뢰도")
+
+    # 금액 통계
+    total_volume: Optional[float] = Field(None, description="총 거래량")
+    avg_quantity: Optional[float] = Field(None, description="평균 거래 수량")
+
+    # 시간별 통계
+    hourly_distribution: Optional[Dict[str, int]] = Field(None, description="시간대별 분포")
+    daily_distribution: Optional[Dict[str, int]] = Field(None, description="일별 분포")
+
+
+class TradingExecutionResponse(BaseModel):
+    """거래 실행 결과 응답 모델"""
+
+    # 기본 정보
+    exchange: str
+    market: str
+    testnet: bool
+    action: str
+    quantity: float
+    order_type: str
+
+    # AI 신호 정보
+    ai_signal: Dict[str, Any]
+    signal_confidence: Optional[float]
+    signal_reason: Optional[str]
+
+    # 거래 결과
+    order_id: Optional[str]
+    order_status: Optional[str]
+    execution_price: Optional[float]
+
+    # 타임스탬프
+    timestamp: datetime
+    executed_at: Optional[datetime]
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+

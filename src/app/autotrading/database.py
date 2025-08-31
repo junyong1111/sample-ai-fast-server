@@ -10,7 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncI
 from pymongo import ASCENDING, DESCENDING
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
-from .model import TradingSignal, TradingSignalCreate, TradingSignalQuery, TradingSignalStats
+from .model import TradingSignal, TradingSignalCreate, TradingSignalQuery, TradingSignalStats, TradingExecution, TradingExecutionCreate, TradingExecutionQuery, TradingExecutionStats
 
 
 class MongoDBService:
@@ -81,6 +81,279 @@ class MongoDBService:
 
         except Exception as e:
             print(f"⚠️ 인덱스 생성 실패: {e}")
+
+    # ===== 거래 실행 결과 저장 =====
+    async def save_trading_execution(self, execution_data: TradingExecutionCreate) -> str:
+        """
+        거래 실행 결과를 MongoDB에 저장
+
+        Args:
+            execution_data: 저장할 거래 실행 결과 데이터
+
+        Returns:
+            저장된 문서의 ObjectId
+        """
+        try:
+            collection = self.db.trading_executions
+
+            # 현재 시간 추가
+            execution_doc = execution_data.dict()
+            execution_doc["timestamp"] = datetime.utcnow()
+            execution_doc["created_at"] = datetime.utcnow()
+
+            # MongoDB에 저장
+            result = await collection.insert_one(execution_doc)
+
+            print(f"✅ 거래 실행 결과 저장 완료: {result.inserted_id}")
+            return str(result.inserted_id)
+
+        except Exception as e:
+            print(f"❌ 거래 실행 결과 저장 실패: {e}")
+            raise
+
+    async def save_trading_execution_with_result(
+        self,
+        exchange: str,
+        market: str,
+        testnet: bool,
+        ai_signal: Dict[str, Any],
+        action: str,
+        quantity: float,
+        order_type: str,
+        price: Optional[float] = None,
+        order_result: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        거래 실행 결과와 함께 저장
+
+        Args:
+            exchange: 거래소
+            market: 시장
+            testnet: 테스트넷 사용 여부
+            ai_signal: AI가 보낸 거래 신호
+            action: 거래 방향
+            quantity: 거래 수량
+            order_type: 주문 타입
+            price: 거래 가격
+            order_result: 주문 실행 결과
+
+        Returns:
+            저장된 문서의 ObjectId
+        """
+        try:
+            # AI 신호에서 정보 추출
+            signal_confidence = ai_signal.get('confidence')
+            signal_reason = ai_signal.get('reason')
+
+            # 주문 결과에서 정보 추출
+            order_id = order_result.get('id') if order_result else None
+            order_status = order_result.get('status') if order_result else None
+            execution_price = order_result.get('price') if order_result else None
+
+            # 저장할 데이터 구성
+            execution_doc = {
+                "exchange": exchange,
+                "market": market,
+                "testnet": testnet,
+                "ai_signal": ai_signal,
+                "signal_confidence": signal_confidence,
+                "signal_reason": signal_reason,
+                "action": action,
+                "quantity": quantity,
+                "order_type": order_type,
+                "price": price,
+                "order_id": order_id,
+                "order_status": order_status,
+                "execution_price": execution_price,
+                "execution_time": datetime.utcnow() if order_result else None,
+                "timestamp": datetime.utcnow(),
+                "executed_at": datetime.utcnow() if order_result else None,
+                "created_at": datetime.utcnow(),
+                "metadata": {
+                    "order_result": order_result,
+                    "source": "trading_service"
+                }
+            }
+
+            # MongoDB에 저장
+            collection = self.db.trading_executions
+            result = await collection.insert_one(execution_doc)
+
+            print(f"✅ 거래 실행 결과 상세 저장 완료: {result.inserted_id}")
+            return str(result.inserted_id)
+
+        except Exception as e:
+            print(f"❌ 거래 실행 결과 상세 저장 실패: {e}")
+            raise
+
+    # ===== 거래 실행 결과 조회 =====
+    async def get_trading_executions(
+        self,
+        query: TradingExecutionQuery
+    ) -> List[TradingExecution]:
+        """
+        조건에 맞는 거래 실행 결과 조회
+
+        Args:
+            query: 조회 조건
+
+        Returns:
+            거래 실행 결과 리스트
+        """
+        try:
+            collection = self.db.trading_executions
+
+            # 쿼리 조건 구성
+            filter_conditions = {}
+
+            if query.exchange:
+                filter_conditions["exchange"] = query.exchange
+
+            if query.market:
+                filter_conditions["market"] = query.market
+
+            if query.testnet is not None:
+                filter_conditions["testnet"] = query.testnet
+
+            if query.action:
+                filter_conditions["action"] = query.action
+
+            if query.order_type:
+                filter_conditions["order_type"] = query.order_type
+
+            # 날짜 범위 조건
+            if query.start_date or query.end_date:
+                date_filter = {}
+                if query.start_date:
+                    date_filter["$gte"] = query.start_date
+                if query.end_date:
+                    date_filter["$lte"] = query.end_date
+                filter_conditions["timestamp"] = date_filter
+
+            # MongoDB에서 조회
+            cursor = collection.find(filter_conditions).sort("timestamp", DESCENDING)
+
+            if query.skip > 0:
+                cursor = cursor.skip(query.skip)
+
+            if query.limit > 0:
+                cursor = cursor.limit(query.limit)
+
+            # 결과 변환
+            executions = []
+            async for doc in cursor:
+                # ObjectId를 문자열로 변환
+                doc["_id"] = str(doc["_id"])
+                executions.append(TradingExecution(**doc))
+
+            print(f"✅ 거래 실행 결과 조회 완료: {len(executions)}개")
+            return executions
+
+        except Exception as e:
+            print(f"❌ 거래 실행 결과 조회 실패: {e}")
+            raise
+
+    async def get_latest_trading_execution(
+        self,
+        exchange: str,
+        market: str,
+        testnet: Optional[bool] = None
+    ) -> Optional[TradingExecution]:
+        """최신 거래 실행 결과 조회"""
+        try:
+            collection = self.db.trading_executions
+
+            filter_conditions = {
+                "exchange": exchange,
+                "market": market
+            }
+
+            if testnet is not None:
+                filter_conditions["testnet"] = testnet
+
+            doc = await collection.find_one(
+                filter_conditions,
+                sort=[("timestamp", DESCENDING)]
+            )
+
+            if doc:
+                doc["_id"] = str(doc["_id"])
+                return TradingExecution(**doc)
+
+            return None
+
+        except Exception as e:
+            print(f"❌ 최신 거래 실행 결과 조회 실패: {e}")
+            return None
+
+    # ===== 통합 조회 =====
+    async def get_trading_data_integrated(
+        self,
+        exchange: str,
+        market: str,
+        testnet: bool = True,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """
+        거래 신호와 거래 실행 결과를 통합하여 조회
+
+        Args:
+            exchange: 거래소
+            market: 시장
+            testnet: 테스트넷 사용 여부
+            limit: 조회 개수 제한
+
+        Returns:
+            통합된 거래 데이터
+        """
+        try:
+            # 거래 신호 조회
+            signals_query = TradingSignalQuery(
+                exchange=exchange,
+                market=market,
+                limit=limit,
+                timeframe=None,
+                signal=None,
+                start_date=None,
+                end_date=None,
+                skip=0
+            )
+            signals = await self.get_trading_signals(signals_query)
+
+            # 거래 실행 결과 조회
+            executions_query = TradingExecutionQuery(
+                exchange=exchange,
+                market=market,
+                testnet=testnet,
+                limit=limit,
+                action=None,
+                order_type=None,
+                start_date=None,
+                end_date=None,
+                skip=0
+            )
+            executions = await self.get_trading_executions(executions_query)
+
+            # 통합 데이터 구성
+            integrated_data = {
+                "exchange": exchange,
+                "market": market,
+                "testnet": testnet,
+                "signals_count": len(signals),
+                "executions_count": len(executions),
+                "latest_signal": signals[0].dict() if signals else None,
+                "latest_execution": executions[0].dict() if executions else None,
+                "recent_signals": [signal.dict() for signal in signals[:10]],
+                "recent_executions": [execution.dict() for execution in executions[:10]],
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+            print(f"✅ 통합 거래 데이터 조회 완료")
+            return integrated_data
+
+        except Exception as e:
+            print(f"❌ 통합 거래 데이터 조회 실패: {e}")
+            raise
 
     # ===== 거래 신호 저장 =====
     async def save_trading_signal(self, signal_data: TradingSignalCreate) -> str:
