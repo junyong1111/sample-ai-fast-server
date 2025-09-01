@@ -4,8 +4,11 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, Literal, List, Union
 from datetime import datetime, timezone
+from src.common.utils.logger import set_logger
 import ccxt
 from fastapi.concurrency import run_in_threadpool
+logger =  set_logger("api.coupon")
+
 
 
 INTERVAL_MAP = {
@@ -83,6 +86,13 @@ class BinanceUtils:
                 "last_price": ticker.get('last') if ticker else None
             }
         except Exception as e:
+            logger.error(
+                f"""
+                    [바이낸스 헬스체크 에러]
+                    class : {e.__class__.__name__}
+                    messsage : {str(e)}
+                """
+            )
             return {
                 "status": "error",
                 "exchange": "binance",
