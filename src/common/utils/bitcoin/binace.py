@@ -5,6 +5,7 @@ import pandas as pd
 from typing import Dict, Any, Literal, List, Union
 from datetime import datetime, timezone
 from src.common.utils.logger import set_logger
+from src.config.setting import settings
 import ccxt
 from fastapi.concurrency import run_in_threadpool
 logger =  set_logger("api.coupon")
@@ -36,13 +37,22 @@ class BinanceUtils:
         """
         import os
 
-        # 환경변수에서 API 키 가져오기 (testnet 우선)
+        # 환경변수에서 API 키 가져오기 (보안 강화)
         if testnet:
-            self.api_key = api_key or os.getenv('BINANCE_TESTNET_API_KEY', 'NSdQ8nBkN77FxUlrtApiOdqV3xnGkY8UNBFAMnQPyIGtPtNS4aZEwGvPj7v2ArXa')
-            self.secret = secret or os.getenv('BINANCE_TESTNET_SECRET_KEY', 'G5CmRrTzQ49wfjPKqVBbr48hyZKZA4nbrTWvwK4TUrXpi7zoeE3CMipTVgWWZndm')
+            self.api_key = settings.BINANCE_TESTNET_API_KEY
+            self.secret = settings.BINANCE_TESTNET_SECRET_KEY
         else:
-            self.api_key = api_key or os.getenv('BINANCE_API_KEY', '')
-            self.secret = secret or os.getenv('BINANCE_SECRET_KEY', '')
+            self.api_key = settings.BINANCE_API_KEY
+            self.secret = settings.BINANCE_SECRET_KEY
+
+        # API 키 검증
+        if not self.api_key or not self.secret:
+            raise ValueError(
+                f"API 키가 설정되지 않았습니다. "
+                f"{'BINANCE_TESTNET_API_KEY' if testnet else 'BINANCE_API_KEY'}와 "
+                f"{'BINANCE_TESTNET_SECRET_KEY' if testnet else 'BINANCE_SECRET_KEY'} "
+                f"환경변수를 설정해주세요."
+            )
 
         self.testnet = testnet
 

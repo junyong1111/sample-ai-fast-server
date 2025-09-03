@@ -4,7 +4,8 @@
 
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
-from src.app.url import blog_router, autotrading_router, trading_router
+from app.url import blog_router, autotrading_router, trading_router
+from app.autotrading_v2.router import router as autotrading_v2_router
 import logging
 import os
 import traceback
@@ -13,11 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 import uvicorn
-from src.app.url import autotrading_router, blog_router
-from src.common.utils.logger import set_logger
-from src.common.error import JSendError, ErrorCode
-from src.app.autotrading.database import mongodb_service
-from src.config.setting import settings
+from common.utils.logger import set_logger
+from common.error import JSendError, ErrorCode
+from app.autotrading.database import mongodb_service
+from config.setting import settings
 
 
 async def startup():
@@ -112,6 +112,9 @@ app = FastAPI(
 app.include_router(autotrading_router.router, prefix="/api/v1/autotrading")
 app.include_router(blog_router.router, prefix="/api/v1/blog")
 app.include_router(trading_router.router, prefix="/api/v1/autotrading/trading")
+
+# V2 라우터 등록
+app.include_router(autotrading_v2_router, prefix="/api/v1/autotrading")
 
 
 # CORS 설정

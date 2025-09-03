@@ -3,9 +3,18 @@ src/app/__init__.py
 src/app/main.py
 src/app/url.py
 src/app/autotrading/__init__.py
+src/app/autotrading/database.py
+src/app/autotrading/docs.py
 src/app/autotrading/model.py
+src/app/autotrading/quantitative_router.py
 src/app/autotrading/router.py
 src/app/autotrading/service.py
+src/app/autotrading/trading_router.py
+src/app/autotrading/trading_service.py
+src/app/autotrading_v2/__init__.py
+src/app/autotrading_v2/models.py
+src/app/autotrading_v2/quantitative_service.py
+src/app/autotrading_v2/router.py
 src/app/blog/__init__.py
 src/app/blog/model.py
 src/app/blog/router.py
@@ -16,6 +25,7 @@ src/common/schema.py
 src/common/constants/__init__.py
 src/common/utils/__init__.py
 src/common/utils/logger.py
+src/common/utils/technical_indicators_v2.py
 src/common/utils/bitcoin/__init__.py
 src/common/utils/bitcoin/binace.py
 src/common/utils/bitcoin/exchange_interface.py

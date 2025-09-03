@@ -6,6 +6,7 @@ from typing import Dict, Any, Literal, List
 from datetime import datetime, timezone
 import ccxt
 from fastapi.concurrency import run_in_threadpool
+from .exchange_interface import ExchangeInterface
 
 
 INTERVAL_MAP = {
@@ -21,7 +22,7 @@ INTERVAL_MAP = {
 }
 
 
-class PyUpbitUtils:
+class PyUpbitUtils(ExchangeInterface):
     def __init__(self, api_key: str | None = None, secret: str | None = None):
         """
         업비트 API 유틸리티 클래스 (CCXT 사용)

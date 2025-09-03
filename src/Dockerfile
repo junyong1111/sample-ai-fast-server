@@ -9,8 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Playwright 설치 (크로미움 포함 의존성 자동 설치)
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir "playwright>=1.46" fastapi "uvicorn[standard]>=0.26" pydantic requests \
+RUN pip install --no-cache-dir "playwright>=1.46" fastapi "uvicorn[standard]>=0.26" pydantic requests \
  && python -m playwright install --with-deps chromium
 
 # setup.py 기반 앱 설치

@@ -9,4 +9,5 @@ pymongo>=4.6.0
 numpy>=2.2.3
 pandas>=2.2.3
 ccxt>=4.0.0
+TA-Lib>=0.4.28
 pydantic-settings>=2.5.2
