@@ -73,7 +73,7 @@ class ExchangeFactory:
         api_key: str | None = None,
         secret: str | None = None,
         testnet: bool = False
-    ) -> ExchangeInterface:
+    ):
         """
         거래소 타입에 따라 적절한 인스턴스 생성
 

@@ -50,6 +50,8 @@ class BinanceUtils:
         config = {
             'enableRateLimit': True,
             'sandbox': testnet,  # testnet 모드 활성화
+            'apiKey': None,
+            'secret': None,
         }
 
         if self.api_key:
