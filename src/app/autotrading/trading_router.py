@@ -11,9 +11,8 @@ from src.app.autotrading.service import ChartService
 
 router = APIRouter(prefix="/trading")
 
-# 거래 서비스 인스턴스
-trading_service = TradingService(testnet=True)
-chart_service = ChartService(exchange_type="binance")
+# 거래 서비스는 사용자별 API 키로 초기화해야 함
+# 전역 인스턴스 대신 함수에서 생성하도록 변경
 
 
 @router.get(
@@ -102,8 +101,14 @@ async def execute_strategy(
             count=100
         )
 
-        # 전략 실행
-        result = await trading_service.execute_strategy(
+        # 전략 실행 (임시로 기본 API 키 사용 - 실제로는 사용자별 API 키 필요)
+        # TODO: 사용자 인증 후 사용자별 API 키로 초기화
+        temp_trading_service = TradingService(
+            api_key="temp_key",  # 임시 키
+            secret_key="temp_secret",  # 임시 키
+            testnet=True
+        )
+        result = await temp_trading_service.execute_strategy(
             market=market,
             signal_data=signal_data,
             risk_per_trade=risk_per_trade,
@@ -130,7 +135,13 @@ async def get_order_status(
 ):
     """주문 상태 조회"""
     try:
-        result = await trading_service.get_order_status(order_id, market)
+        # TODO: 사용자 인증 후 사용자별 API 키로 초기화
+        temp_trading_service = TradingService(
+            api_key="temp_key",
+            secret_key="temp_secret",
+            testnet=True
+        )
+        result = await temp_trading_service.get_order_status(order_id, market)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -148,7 +159,13 @@ async def cancel_order(
 ):
     """주문 취소"""
     try:
-        result = await trading_service.cancel_order(order_id, market)
+        # TODO: 사용자 인증 후 사용자별 API 키로 초기화
+        temp_trading_service = TradingService(
+            api_key="temp_key",
+            secret_key="temp_secret",
+            testnet=True
+        )
+        result = await temp_trading_service.cancel_order(order_id, market)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

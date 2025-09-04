@@ -1,57 +1,74 @@
 import os
 from pathlib import Path
-
+from typing import Final
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def getenv(key: str, default: str = None) -> str:
+    v: str | None = os.getenv(key)
+    if v is None and default is not None:
+        return default
+    assert v is not None, f"Setting {key} is not found"
+    return v
 
 class Settings(BaseSettings):
-    STAGE: str = os.getenv('STAGE', "development")
+    # 기본 앱 설정
+    STAGE: Final[str] = getenv('STAGE', "development")
 
-    ERR_LOG_PATH: str = os.getenv('ERR_LOG_PATH', "./logs/error")
-    TMP_FILE_PATH: str = os.getenv('TMP_FILE_PATH', "./tmp")
-    DEFAULT_LOGGING_PATH: str = os.getenv('DEFAULT_LOGGING_PATH', "./logs")
-    OPENAI_API_KEY: str = os.getenv('OPENAI_API_KEY', "")
+    # 로그 및 파일 경로 설정
+    ERR_LOG_PATH: Final[str] = getenv('ERR_LOG_PATH', "./logs/error")
+    TMP_FILE_PATH: Final[str] = getenv('TMP_FILE_PATH', "./tmp")
+    DEFAULT_LOGGING_PATH: Final[str] = getenv('DEFAULT_LOGGING_PATH', "./logs")
 
-    BINANCE_BASE_URL: str = os.getenv('BINANCE_BASE_URL', "https://api.binance.com")
-    TA_WINDOW: int = int(os.getenv('TA_WINDOW', "20"))
-    TA_INTERVAL: str = os.getenv('TA_INTERVAL', "1d")
-    TA_LIMIT: int = int(os.getenv('TA_LIMIT', "200"))
+    # 외부 API 키 설정
+    OPENAI_API_KEY: Final[str] = getenv('OPENAI_API_KEY', "")
 
-    BEAR_PERIOD_IN_DAYS: int = int(os.getenv('BEAR_PERIOD_IN_DAYS', "21"))
-    BULL_PERIOD_IN_DAYS: int = int(os.getenv('BULL_PERIOD_IN_DAYS', "3"))
-    HOLD_PERIOD_IN_DAYS: int = int(os.getenv('HOLD_PERIOD_IN_DAYS', "7"))
-    START_DATE: str = os.getenv('START_DATE', "2020-01-01")
-    END_DATE: str = os.getenv('END_DATE', "2025-01-01")
+    # MongoDB 설정 (기존 코드 호환성을 위해)
+    MONGODB_URL: Final[str] = getenv('MONGODB_URL', "mongodb://localhost:27017")
+    MONGODB_DATABASE: Final[str] = getenv('MONGODB_DATABASE', "autotrading")
 
-    RISK_PER_TRADE: float = float(os.getenv('RISK_PER_TRADE', "0.01"))
-    STOP_LOSS_PERCENT: float = float(os.getenv('STOP_LOSS_PERCENT', "0.02"))
-    TAKE_PROFIT_PERCENT: float = float(os.getenv('TAKE_PROFIT_PERCENT', "0.05"))
+    # PostgreSQL 설정 (기존 코드 호환성을 위해)
+    POSTGRESQL_DB_HOST: Final[str] = getenv('POSTGRESQL_DB_HOST', "localhost")
+    POSTGRESQL_DB_PORT: Final[str] = getenv('POSTGRESQL_DB_PORT', "5432")
+    POSTGRESQL_DB_DATABASE: Final[str] = getenv('POSTGRESQL_DB_DATABASE', "autotrading")
+    POSTGRESQL_DB_USER: Final[str] = getenv('POSTGRESQL_DB_USER', "devjun")
+    POSTGRESQL_DB_PASSWORD: Final[str] = getenv('POSTGRESQL_DB_PASSWORD', "X7pQa9Lm!")
 
-    # MongoDB 설정 추가
-    MONGODB_URL: str = os.getenv('MONGODB_URL', "mongodb://localhost:27017")
-    MONGODB_DATABASE: str = os.getenv('MONGODB_DATABASE', "autotrading")
+    # 데이터베이스 설정 (기존 코드 호환성을 위해)
+    @property
+    def DATABASES(self):
+        return {
+            "DATABASE": {
+                "default": {
+                    "DB_HOST": getenv("POSTGRESQL_DB_HOST", "localhost"),
+                    "DB_PORT": getenv("POSTGRESQL_DB_PORT", "5432"),
+                    "DB_NAME": getenv("POSTGRESQL_DB_DATABASE", "autotrading"),
+                    "DB_USER": getenv("POSTGRESQL_DB_USER", "devjun"),
+                    "DB_PASSWORD": getenv("POSTGRESQL_DB_PASSWORD", "X7pQa9Lm!"),
+                }
+            },
+            "default": "default"
+        }
 
-    # Binance
+    # 각 설정 모듈을 속성으로 가져오기
+    @property
+    def database(self):
+        from .database import database_config
+        return database_config
 
-    # Binance 설정 추가
-    BINANCE_URL: str = os.getenv('BINANCE_URL', "https://api.binance.com")
-    BINANCE_API_KEY: str = os.getenv('BINANCE_API_KEY', "")
-    BINANCE_SECRET_KEY: str = os.getenv('BINANCE_SECRET_KEY', "")
+    @property
+    def autotrading(self):
+        from .autotrading import autotrading_config
+        return autotrading_config
 
-    # Binance Testnet 설정 추가
-    BINANCE_TESTNET_URL: str = os.getenv('BINANCE_TESTNET_URL', "https://testnet.binance.vision")
-    BINANCE_TESTNET_API_KEY: str = os.getenv('BINANCE_TESTNET_API_KEY', "")
-    BINANCE_TESTNET_SECRET_KEY: str = os.getenv('BINANCE_TESTNET_SECRET_KEY', "")
+    model_config = {
+        "extra": "allow",  # 추가 필드 허용
+        "env_file": f"{Path(__file__).parent.parent.parent}/.env"
+    }
 
-    # 업비트 API 설정 추가
-    UPBIT_BASE_URL: str = os.getenv('UPBIT_BASE_URL', "https://api.upbit.com")
-
-    class Config:
-        # .env 파일 경로를 현재 작업 디렉토리 기준으로 수정
-        config_path = Path(__file__)
-        print(f"config_path: {config_path}")
-        env_file = f"{config_path.parent.parent}/.env"
-
-
+# 인스턴스 생성
 settings = Settings()
 
 

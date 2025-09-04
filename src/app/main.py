@@ -4,8 +4,8 @@
 
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
-from app.url import blog_router, autotrading_router, trading_router
-from app.autotrading_v2.router import router as autotrading_v2_router
+from .url import blog_router, autotrading_router, trading_router, user_router, autotrading_v2_router
+
 import logging
 import os
 import traceback
@@ -14,10 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 import uvicorn
-from common.utils.logger import set_logger
-from common.error import JSendError, ErrorCode
-from app.autotrading.database import mongodb_service
-from config.setting import settings
+from src.common.utils.logger import set_logger
+from src.common.error import JSendError, ErrorCode
+from src.app.autotrading.database import mongodb_service
+from src.config.setting import settings
+from src.package.db import init_pool, release_pool
 
 
 async def startup():
@@ -41,11 +42,26 @@ async def startup():
         mongodb_service.database_name = mongodb_database
         await mongodb_service.connect()
 
-        logger.info(f"✅ MongoDB 연결 성공: {mongodb_url}/{mongodb_database}")
+        logger.info(f"[MongoDB 연결 성공] {mongodb_url}/{mongodb_database}")
 
     except Exception as e:
-        logger.error(f"❌ MongoDB 연결 실패: {e}")
-        logger.warning("⚠️ MongoDB 없이 서비스가 시작됩니다. 거래 신호 저장 기능이 제한됩니다.")
+        logger.error(f"""
+                        [MongoDB 연결 실패]
+                        error : {e.__class__.__name__}
+                        message : {e}
+                        MongoDB 없이 서비스가 시작됩니다. 거래 신호 저장 기능이 제한됩니다."
+                    """)
+
+    try:
+        # PostgreSQL 서비스 설정 및 연결
+        await init_pool()
+        logger.info(f"[PostgreSQL 연결 성공] {settings.POSTGRESQL_DB_HOST}:{settings.POSTGRESQL_DB_PORT}/{settings.POSTGRESQL_DB_DATABASE}")
+    except Exception as e:
+        logger.error(f"""
+                        [PostgreSQL 연결 실패]
+                        error : {e.__class__.__name__}
+                        message : {e}
+                    """)
 
 async def shutdown():
     """애플리케이션 종료 시 실행"""
@@ -60,9 +76,21 @@ async def shutdown():
     # MongoDB 연결 해제
     try:
         await mongodb_service.disconnect()
-        logger.info("🔌 MongoDB 연결 해제 완료")
+        logger.info(f"[MongoDB 연결 해제 완료] {mongodb_service.connection_string}/{mongodb_service.database_name}")
     except Exception as e:
-        logger.error(f"❌ MongoDB 연결 해제 실패: {e}")
+        logger.error(f"""
+                        [MongoDB 연결 해제 실패]
+                        error : {e.__class__.__name__}
+                        message : {e}
+                    """)
+    try:
+        await release_pool()
+    except Exception as e:
+        logger.error(f"""
+                        [PostgreSQL 연결 해제 실패]
+                        error : {e.__class__.__name__}
+                        message : {e}
+                    """)
 
 # 로깅 설정
 log_dir = "../logs"
@@ -85,20 +113,30 @@ global_vector_service = None
 async def lifespan(app: FastAPI):
     """애플리케이션 시작/종료 시 실행"""
 
-    logger.info("🚀 FastAPI 시작")
+    logger.info("FastAPI 시작")
     await startup()
 
     # 전역 서비스 초기화
     try:
-        logger.info("✅ 전역 서비스 초기화 완료")
+        logger.info(
+            f"""
+                [전역 서비스 초기화 완료]
+            """)
     except Exception as e:
-        logger.error(f"❌ 전역 서비스 초기화 실패: {e}")
+        logger.error(f"""
+                        [전역 서비스 초기화 실패]
+                        error : {e.__class__.__name__}
+                        message : {e}
+                    """)
         raise
 
     yield
     await shutdown()
 
-    logger.info("🛑 FastAPI 종료")
+    logger.info(
+        f"""
+            [FastAPI 종료]
+        """)
 
 
 # FastAPI 앱 생성
@@ -109,12 +147,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.include_router(autotrading_router.router, prefix="/api/v1/autotrading")
-app.include_router(blog_router.router, prefix="/api/v1/blog")
-app.include_router(trading_router.router, prefix="/api/v1/autotrading/trading")
+prefix_url = '/api/v1'
+app.include_router(user_router, prefix=prefix_url)
+app.include_router(autotrading_v2_router.router, prefix=prefix_url)
+app.include_router(autotrading_router.router, prefix=prefix_url)
+app.include_router(trading_router.router, prefix=prefix_url)
+app.include_router(blog_router.router, prefix=prefix_url)
 
-# V2 라우터 등록
-app.include_router(autotrading_v2_router, prefix="/api/v1/autotrading")
 
 
 # CORS 설정
@@ -126,17 +165,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/health")
-async def health_check():
-    """헬스체크 엔드포인트"""
-    return {
-        "status": "healthy",
-        "service": "PDF Processing with Vector DB",
-        "version": "2.0.0",
-        "global_services_initialized": global_vector_service is not None,
-        "mongodb_connected": mongodb_service.client is not None
-    }
-
 # 개발 서버 실행
 if __name__ == "__main__":
     logger.info("🎯 서버 시작: http://localhost:8080")
@@ -147,7 +175,6 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
-
 
 @app.exception_handler(JSendError)
 async def jsend_error_exception_handler(request: Request, exc: JSendError):

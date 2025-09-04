@@ -22,10 +22,10 @@ setup(
         "numpy>=2.2.3",                 # 수치 연산
         "pandas>=2.2.3",                # 데이터 분석
         "ccxt>=4.0.0",                  # 암호화폐 거래소 API (업비트, 바이낸스 등)
-        # DB 연동 시
-        # "psycopg2-binary",
-        # "sqlalchemy>=2.0",
         "pydantic-settings>=2.5.2",
+
+        #postgres db
+        "asyncpg>=0.29.0",
     ],
     entry_points={
         "console_scripts": [

@@ -13,22 +13,20 @@ from src.config.setting import settings
 class TradingService:
     """자동 매매 서비스"""
 
-    def __init__(self, testnet: bool = True):
+    def __init__(self, api_key: str = None, secret_key: str = None, testnet: bool = True):
         """
         거래 서비스 초기화
 
         Args:
+            api_key: 바이낸스 API 키
+            secret_key: 바이낸스 시크릿 키
             testnet: 테스트넷 사용 여부 (기본값: True)
         """
         self.testnet = testnet
 
-        # Binance API 설정
-        if testnet:
-            api_key = settings.BINANCE_TESTNET_API_KEY
-            secret_key = settings.BINANCE_TESTNET_SECRET_KEY
-        else:
-            api_key = settings.BINANCE_API_KEY
-            secret_key = settings.BINANCE_SECRET_KEY
+        # API 키 검증
+        if not api_key or not secret_key:
+            raise ValueError("API 키와 시크릿 키가 필요합니다.")
 
         # Binance 유틸리티 초기화
         self.binance = BinanceUtils(

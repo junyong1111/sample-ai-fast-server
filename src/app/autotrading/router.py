@@ -15,13 +15,12 @@ from src.common.utils.bitcoin.binace import BinanceUtils
 
 router = APIRouter(prefix="/charts")
 
-# 간단한 차트 서비스 인스턴스
-chart_service = ChartService()
+# 차트 서비스는 사용자별 API 키로 초기화해야 함
+# 전역 인스턴스 대신 함수에서 생성하도록 변경
 
-# ===== 🏪 거래소 정보 =====
 @router.get(
     "/exchanges",
-    tags=["🏪 거래소"],
+    tags=["Exchanges"],
     summary="지원하는 거래소 목록",
     description=desc_exchanges_list
 )
@@ -36,7 +35,7 @@ async def get_exchanges():
 
 @router.get(
     "/exchanges/{exchange_type}",
-    tags=["🏪 거래소"],
+    tags=["Exchanges"],
     summary="거래소 상세 정보",
     description=desc_exchange_info
 )
@@ -49,7 +48,9 @@ async def get_exchange_info(exchange_type: str):
                 detail=f"지원하지 않는 거래소입니다. 'upbit' 또는 'binance'를 사용하세요."
             )
 
-        info = chart_service.get_exchange_info()
+        # 임시로 기본 설정으로 초기화 (거래소 정보만 가져오므로 API 키 불필요)
+        temp_service = ChartService(exchange_type="upbit")
+        info = temp_service.get_exchange_info()
         exchange_info = EXCHANGE_DETAILS.get(exchange_type, {})
 
         return {
@@ -65,7 +66,7 @@ async def get_exchange_info(exchange_type: str):
 # ===== 📊 차트 데이터 =====
 @router.get(
     "/price/{exchange_type}/{market}",
-    tags=["📊 차트 데이터"],
+    tags=["Charts"],
     summary="현재 가격 조회",
     description=desc_price_endpoint
 )
@@ -94,8 +95,8 @@ async def get_current_price(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get(
-    "/chart/{exchange_type}/{market}",
-    tags=["📊 차트 데이터"],
+    "{exchange_type}/{market}",
+    tags=["Charts"],
     summary="차트 데이터 조회",
     description=desc_chart_endpoint
 )
@@ -143,7 +144,7 @@ async def get_chart_data(
 # ===== 📈 기술적 지표 =====
 @router.get(
     "/rsi/{exchange_type}/{market}",
-    tags=["📈 기술적 지표"],
+    tags=["Technical Indicators"],
     summary="RSI 지표 조회",
     description=desc_rsi_endpoint
 )
@@ -194,7 +195,7 @@ async def get_rsi(
 
 @router.get(
     "/macd/{exchange_type}/{market}",
-    tags=["📈 기술적 지표"],
+    tags=["Technical Indicators"],
     summary="MACD 지표 조회",
     description=desc_macd_endpoint
 )
@@ -232,7 +233,7 @@ async def get_macd(
 # ===== 🎯 거래 신호 =====
 @router.get(
     "/signal/{exchange_type}/{market}",
-    tags=["🎯 거래 신호"],
+    tags=["Trading Signals"],
     summary="종합 거래 신호 (기본)",
     description=desc_signal_endpoint
 )
@@ -269,7 +270,7 @@ async def get_trading_signal(
 
 @router.get(
     "/signal/{exchange_type}/{market}/detailed",
-    tags=["🎯 거래 신호"],
+    tags=["Trading Signals"],
     summary="종합 거래 신호 (상세 + MongoDB 저장)",
     description="에이전트용 상세 거래 신호 조회 및 MongoDB 저장"
 )
@@ -320,7 +321,7 @@ async def get_detailed_trading_signal(
 # ===== 🗄️ MongoDB 거래 신호 조회 =====
 @router.get(
     "/signals/history",
-    tags=["🗄️ 거래 신호 히스토리"],
+    tags=["Trading Signals History"],
     summary="저장된 거래 신호 히스토리 조회",
     description="MongoDB에 저장된 거래 신호 히스토리 조회"
 )
@@ -369,7 +370,7 @@ async def get_trading_signal_history(
 
 @router.get(
     "/signals/{signal_id}",
-    tags=["🗄️ 거래 신호 히스토리"],
+    tags=["Trading Signals History"],
     summary="특정 거래 신호 상세 조회",
     description="ID로 특정 거래 신호의 상세 정보 조회"
 )
@@ -394,7 +395,7 @@ async def get_trading_signal_by_id(signal_id: str):
 
 @router.get(
     "/signals/latest/{exchange_type}/{market}",
-    tags=["🗄️ 거래 신호 히스토리"],
+    tags=["Trading Signals History"],
     summary="최신 거래 신호 조회",
     description="특정 거래소/시장의 최신 거래 신호 조회"
 )
@@ -423,7 +424,7 @@ async def get_latest_trading_signal(
 
 @router.get(
     "/signals/stats",
-    tags=["🗄️ 거래 신호 히스토리"],
+    tags=["Trading Signals History"],
     summary="거래 신호 통계 정보",
     description="저장된 거래 신호의 통계 정보 조회"
 )
@@ -470,35 +471,20 @@ async def get_trading_signal_stats(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"통계 조회 실패: {str(e)}")
 
-# ===== 📋 사용 예시 =====
-@router.get(
-    "/examples",
-    tags=["📋 사용 예시"],
-    summary="API 사용 예시",
-    description=desc_examples_endpoint
-)
-async def get_api_examples():
-    """API 사용 예시"""
-    return {
-        "message": "API 사용 예시",
-        "examples": API_EXAMPLES_DATA,
-        "거래소별_시장_형식": MARKET_FORMAT_RULES,
-        "시간프레임_옵션": TIMEFRAME_OPTIONS,
-        "캔들_개수_권장사항": COUNT_RECOMMENDATIONS
-    }
 
 # ===== 🔧 상태 확인 =====
 @router.get(
     "/health",
-    tags=["🔧 상태 확인"],
+    tags=["Health Check"],
     summary="서비스 상태 확인",
     description=desc_health_endpoint
 )
 async def health_check():
     """서비스 상태 확인"""
     try:
-        # 바이낸스 상태 확인
-        binance_health = await chart_service.get_chart_health()
+        # 바이낸스 상태 확인 (임시로 기본 설정 사용)
+        temp_service = ChartService(exchange_type="upbit")
+        binance_health = await temp_service.get_chart_health()
 
         return {
             "status": "healthy",
@@ -519,7 +505,7 @@ async def health_check():
 # ===== 🤖 AI 거래 실행 =====
 @router.post(
     "/trade/execute",
-    tags=["🤖 AI 거래 실행"],
+    tags=["AI Trading Execution"],
     summary="AI 거래 시그널에 따른 자동 거래 실행",
     description="AI가 제공한 거래 시그널을 받아서 자동으로 거래를 실행합니다."
 )
@@ -652,7 +638,7 @@ async def execute_ai_trade(
 # ===== 🔧 거래 설정 =====
 @router.get(
     "/trade/settings",
-    tags=["🔧 거래 설정"],
+    tags=["Trade Settings"],
     summary="현재 거래 설정 조회",
     description="AI 거래 봇의 현재 설정을 조회합니다."
 )
