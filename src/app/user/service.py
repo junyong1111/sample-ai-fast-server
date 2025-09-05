@@ -1,4 +1,6 @@
-import hashlib
+from src.common.error import JSendError
+from src.common.error import ErrorCode
+from src.common.utils.auth import get_md5_hash
 from src.app.user.model import User
 from src.app.user.repository import UserRepository
 from src.config import settings
@@ -19,6 +21,18 @@ class UserService:
         self.logger.info(f"유저 조회 결과: {user}")
         return user
 
+    async def get_user_by_user_id_and_password(self, user_id: str, user_password: str):
+            hash_password = await get_md5_hash(user_password)
+            async with connection() as session:
+                user = await self.user_repository.get_user_by_user_id_and_password(
+                    session=session,
+                    user_id=user_id,
+                    user_password=hash_password,
+                )
+            self.logger.info(f"유저 조회 결과: {user}")
+            return user
+
+
     async def create_user(self, user: User):
         self.logger.info(
             f"""
@@ -30,20 +44,37 @@ class UserService:
         )
         #1. 해당 유저 중복 확인
         async with connection() as session:
-            user = await self.user_repository.get_user_by_user_id(
+            user_obj = await self.user_repository.get_user_by_user_id(
                 user_id=user.id,
                 session=session
             )
-            if user:
+            if user_obj:
                 raise Exception("이미 존재하는 유저입니다.")
         #2. 유저 등록
-        hash_password = hashlib.sha256(user.password.encode()).hexdigest()
+        hash_password = await get_md5_hash(user.password)
         user.password = hash_password
 
         async with connection() as session:
-            await self.user_repository.create_user(
+            ret = await self.user_repository.create_user(
                 session=session,
                 user=user
             )
+        if not ret :
+            self.logger.error("유저 등록 실패")
+            raise JSendError(
+                code=ErrorCode.User.USER_CREATE_FAIL[0],
+                message=ErrorCode.User.USER_CREATE_FAIL[1],
+            )
+        self.logger.info("유저 등록 성공")
+        return user
 
-
+    async def login(self, user_id: str, password: str):
+        user_obj = await self.get_user_by_user_id_and_password(user_id, password)
+        if not user_obj:
+            self.logger.error("유저 로그인 실패")
+            raise JSendError(
+                code=ErrorCode.User.USER_NOT_FOUND[0],
+                message=ErrorCode.User.USER_NOT_FOUND[1],
+            )
+        self.logger.info("유저 로그인 성공")
+        return user_obj

@@ -11,8 +11,8 @@ class User(BaseModel):
     name: str
     memo: str
     role: UserRole = UserRole.USER
-    binance_api_key: str | None = None
-    binance_api_secret: str | None = None
-    upbit_api_key: str | None = None
-    upbit_api_secret: str | None = None
 
+
+class UserLoginRequest(BaseModel):
+    user_id: str
+    password: str

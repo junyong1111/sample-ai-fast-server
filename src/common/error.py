@@ -49,21 +49,21 @@ class ErrorCode:
             "허용되지 않은 도메인입니다.",
             "허용되지 않은 도메인입니다.",
         )
-    class Document:
-        PDF_UPLOAD_ERROR = (
-            "D001",
-            "PDF 파일만 업로드 가능합니다.",
-            "PDF 파일만 업로드 가능합니다.",
+    class User:
+        USER_NOT_FOUND = (
+            "U001",
+            "유저를 찾을 수 없습니다.",
+            "유저를 찾을 수 없습니다.",
         )
-        PDF_ANALYSIS_ERROR = (
+        USER_CREATE_FAIL = (
             "D002",
-            "PDF 분석에 실패했습니다.",
-            "PDF 분석에 실패했습니다.",
+            "유저 생성 실패",
+            "유저 생성 실패",
         )
-        PDF_EXTRACT_ERROR = (
-            "D003",
-            "PDF 추출에 실패했습니다.",
-            "PDF 추출에 실패했습니다.",
+        USER_EXTRACT_FAIL = (
+            "D003"  ,
+            "유저 추출 실패",
+            "유저 추출 실패",
         )
 
 

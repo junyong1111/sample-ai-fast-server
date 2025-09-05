@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request
-from src.app.user.model import User
+from src.app.user.model import User, UserLoginRequest
 from src.app.user.service import UserService
 from src.common.utils.logger import set_logger
 
@@ -30,3 +30,15 @@ async def register(
     user_service: UserService = Depends(get_user_service)
 ):
     return await user_service.create_user(user)
+
+@router.post(
+    '/login',
+    tags=["Users"],
+    summary="사용자 로그인",
+    description="사용자를 로그인합니다."
+)
+async def login(
+    user: UserLoginRequest,
+    user_service: UserService = Depends(get_user_service)
+):
+    return await user_service.login(user.user_id, user.password)
