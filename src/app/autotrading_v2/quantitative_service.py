@@ -115,13 +115,13 @@ class QuantitativeServiceV2:
                 "analysis": {
                     # 시장 상황 요약
                     "market_condition": self._get_market_condition_summary(regime, regime_confidence, indicators),
-                    
+
                     # 거래 신호 및 권장사항
                     "trading_recommendation": self._get_trading_recommendation(signal, weighted_score, position_size, position_percentage, signal_confidence),
-                    
+
                     # 주요 지표 해석
                     "key_indicators": self._get_key_indicators_summary(indicators, scores),
-                    
+
                     # 리스크 평가
                     "risk_assessment": self._get_risk_assessment(weighted_score, regime_confidence, indicators)
                 },
@@ -307,6 +307,283 @@ class QuantitativeServiceV2:
         except Exception as e:
             logger.error(f"거래 신호 생성 실패: {str(e)}")
             return "HOLD", 0.0, "HOLD", 0.0
+
+    def _get_market_condition_summary(self, regime: str, regime_confidence: float, indicators: Dict[str, Any]) -> Dict[str, Any]:
+        """시장 상황 요약 (인간 친화적)"""
+        try:
+            # 현재 가격 정보 (여러 방법으로 시도)
+            current_price = 0
+            ema_200 = 0
+            adx = 0
+
+            # 1. close 배열에서 가져오기
+            close_values = indicators.get('close', [])
+            if len(close_values) > 0:
+                current_price = float(close_values[-1])
+
+            # 2. close가 없으면 bb_middle 사용 (볼린저 밴드 중간값)
+            if current_price == 0:
+                bb_middle = indicators.get('bb_middle', 0)
+                if isinstance(bb_middle, (list, np.ndarray)) and len(bb_middle) > 0:
+                    current_price = float(bb_middle[-1])
+                else:
+                    current_price = float(bb_middle)
+
+            # 3. 그것도 없으면 vwap 사용
+            if current_price == 0:
+                vwap = indicators.get('vwap', 0)
+                if isinstance(vwap, (list, np.ndarray)) and len(vwap) > 0:
+                    current_price = float(vwap[-1])
+                else:
+                    current_price = float(vwap)
+
+            # EMA200과 ADX는 단일 값으로 저장됨 (배열일 수도 있으므로 처리)
+            ema_200_val = indicators.get('ema_200', 0)
+            if isinstance(ema_200_val, (list, np.ndarray)) and len(ema_200_val) > 0:
+                ema_200 = float(ema_200_val[-1])
+            else:
+                ema_200 = float(ema_200_val)
+
+            adx_val = indicators.get('adx', 0)
+            if isinstance(adx_val, (list, np.ndarray)) and len(adx_val) > 0:
+                adx = float(adx_val[-1])
+            else:
+                adx = float(adx_val)
+
+            # 시장 상황 설명
+            if regime == "trend":
+                trend_direction = "상승" if current_price > ema_200 else "하락"
+                condition_desc = f"강한 추세장 ({trend_direction} 추세)"
+                confidence_level = "높음" if regime_confidence > 0.7 else "보통" if regime_confidence > 0.4 else "낮음"
+            elif regime == "range":
+                condition_desc = "횡보장 (박스권 움직임)"
+                confidence_level = "높음" if regime_confidence > 0.7 else "보통" if regime_confidence > 0.4 else "낮음"
+            else:
+                condition_desc = "전환구간 (방향성 불분명)"
+                confidence_level = "낮음"
+
+            return {
+                "current_price": f"${current_price:,.2f}",
+                "trend_vs_ema200": f"{'상승' if current_price > ema_200 else '하락'} (EMA200: ${ema_200:,.2f})",
+                "market_condition": condition_desc,
+                "trend_strength": f"ADX {adx:.0f} ({'강함' if adx > 40 else '보통' if adx > 25 else '약함'})",
+                "confidence_level": confidence_level,
+                "summary": f"현재 {condition_desc}으로 판단되며, 신뢰도는 {confidence_level}입니다."
+            }
+        except Exception as e:
+            logger.error(f"시장 상황 요약 생성 실패: {str(e)}")
+            return {"error": "시장 상황 분석 실패"}
+
+    def _get_trading_recommendation(self, signal: str, weighted_score: float, position_size: str, position_percentage: float, signal_confidence: float) -> Dict[str, Any]:
+        """거래 신호 및 권장사항 (인간 친화적)"""
+        try:
+            # 신호 해석
+            if signal == "BUY":
+                signal_desc = "매수 신호"
+                action_desc = "매수 진입 권장"
+                color = "🟢"
+            elif signal == "SELL":
+                signal_desc = "매도 신호"
+                action_desc = "매도 진입 권장"
+                color = "🔴"
+            else:
+                signal_desc = "관망 신호"
+                action_desc = "현재 관망 권장"
+                color = "🟡"
+
+            # 포지션 크기 해석
+            if position_size == "FULL":
+                position_desc = "풀 포지션 (100%)"
+                risk_level = "높음"
+            elif position_size == "HALF":
+                position_desc = "절반 포지션 (50%)"
+                risk_level = "보통"
+            else:
+                position_desc = "관망 (0%)"
+                risk_level = "낮음"
+
+            # 신뢰도 해석
+            confidence_desc = "매우 높음" if signal_confidence > 0.8 else "높음" if signal_confidence > 0.6 else "보통" if signal_confidence > 0.4 else "낮음"
+
+            # 점수 해석
+            score_strength = "매우 강함" if abs(weighted_score) > 0.7 else "강함" if abs(weighted_score) > 0.5 else "보통" if abs(weighted_score) > 0.3 else "약함"
+
+            return {
+                "signal": f"{color} {signal_desc}",
+                "action": action_desc,
+                "position_size": position_desc,
+                "risk_level": risk_level,
+                "confidence": f"{confidence_desc} ({signal_confidence:.1%})",
+                "score_strength": f"{score_strength} (점수: {weighted_score:+.3f})",
+                "recommendation": f"{action_desc}. {position_desc}으로 진입하되, 신뢰도는 {confidence_desc}입니다."
+            }
+        except Exception as e:
+            logger.error(f"거래 권장사항 생성 실패: {str(e)}")
+            return {"error": "거래 권장사항 생성 실패"}
+
+    def _get_key_indicators_summary(self, indicators: Dict[str, Any], scores: Dict[str, float]) -> Dict[str, Any]:
+        """주요 지표 해석 (인간 친화적)"""
+        try:
+            # RSI 해석
+            rsi = indicators.get('rsi', [50])[-1] if len(indicators.get('rsi', [])) > 0 else 50
+            if rsi > 70:
+                rsi_desc = "과매수 (매도 신호)"
+                rsi_color = "🔴"
+            elif rsi < 30:
+                rsi_desc = "과매도 (매수 신호)"
+                rsi_color = "🟢"
+            else:
+                rsi_desc = "중립 구간"
+                rsi_color = "🟡"
+
+            # MACD 해석
+            macd = indicators.get('macd', [0])[-1] if len(indicators.get('macd', [])) > 0 else 0
+            macd_signal = indicators.get('macd_signal', [0])[-1] if len(indicators.get('macd_signal', [])) > 0 else 0
+            if macd > macd_signal:
+                macd_desc = "상승 모멘텀"
+                macd_color = "🟢"
+            else:
+                macd_desc = "하락 모멘텀"
+                macd_color = "🔴"
+
+            # 볼린저 밴드 해석
+            bb_pct_b = indicators.get('bb_pct_b', [0.5])[-1] if len(indicators.get('bb_pct_b', [])) > 0 else 0.5
+            if bb_pct_b > 0.8:
+                bb_desc = "상단 근접 (매도 신호)"
+                bb_color = "🔴"
+            elif bb_pct_b < 0.2:
+                bb_desc = "하단 근접 (매수 신호)"
+                bb_color = "🟢"
+            else:
+                bb_desc = "중간 구간"
+                bb_color = "🟡"
+
+            # 거래량 해석
+            volume_z = indicators.get('volume_z_score', [0])[-1] if len(indicators.get('volume_z_score', [])) > 0 else 0
+            if volume_z > 1:
+                volume_desc = "거래량 급증"
+                volume_color = "🟢"
+            elif volume_z < -1:
+                volume_desc = "거래량 급감"
+                volume_color = "🔴"
+            else:
+                volume_desc = "평균 거래량"
+                volume_color = "🟡"
+
+            return {
+                "rsi": {
+                    "value": f"{rsi:.1f}",
+                    "interpretation": f"{rsi_color} {rsi_desc}",
+                    "score": f"{scores.get('rsi', 0):+.2f}"
+                },
+                "macd": {
+                    "value": f"{macd:.2f}",
+                    "interpretation": f"{macd_color} {macd_desc}",
+                    "score": f"{scores.get('macd', 0):+.2f}"
+                },
+                "bollinger_bands": {
+                    "value": f"{bb_pct_b:.2f}",
+                    "interpretation": f"{bb_color} {bb_desc}",
+                    "score": f"{scores.get('bollinger', 0):+.2f}"
+                },
+                "volume": {
+                    "value": f"{volume_z:+.1f}",
+                    "interpretation": f"{volume_color} {volume_desc}",
+                    "score": f"{scores.get('volume', 0):+.2f}"
+                }
+            }
+        except Exception as e:
+            logger.error(f"주요 지표 해석 생성 실패: {str(e)}")
+            return {"error": "주요 지표 해석 생성 실패"}
+
+    def _get_risk_assessment(self, weighted_score: float, regime_confidence: float, indicators: Dict[str, Any]) -> Dict[str, Any]:
+        """리스크 평가 (인간 친화적)"""
+        try:
+            # 전체 리스크 레벨
+            if abs(weighted_score) > 0.7 and regime_confidence > 0.7:
+                risk_level = "낮음"
+                risk_color = "🟢"
+            elif abs(weighted_score) > 0.5 and regime_confidence > 0.5:
+                risk_level = "보통"
+                risk_color = "🟡"
+            else:
+                risk_level = "높음"
+                risk_color = "🔴"
+
+            # 변동성 평가
+            atr_values = indicators.get('atr', [])
+            close_values = indicators.get('close', [])
+
+            # 현재 가격 가져오기 (여러 방법으로 시도)
+            current_price = 0
+            if len(close_values) > 0:
+                current_price = float(close_values[-1])
+            else:
+                # bb_middle 시도
+                bb_middle = indicators.get('bb_middle', 0)
+                if isinstance(bb_middle, (list, np.ndarray)) and len(bb_middle) > 0:
+                    current_price = float(bb_middle[-1])
+                else:
+                    current_price = float(bb_middle)
+
+                # bb_middle이 0이면 vwap 시도
+                if current_price == 0:
+                    vwap = indicators.get('vwap', 0)
+                    if isinstance(vwap, (list, np.ndarray)) and len(vwap) > 0:
+                        current_price = float(vwap[-1])
+                    else:
+                        current_price = float(vwap)
+
+            if len(atr_values) > 0 and current_price > 0:
+                atr = float(atr_values[-1])
+                volatility_pct = (atr / current_price * 100) if current_price > 0 else 0
+            else:
+                # ATR이 없거나 0인 경우, 가격의 2%를 기본 변동성으로 사용
+                volatility_pct = 2.0  # 기본 2% 변동성
+                atr = current_price * 0.02
+
+            # 변동성이 0인 경우 기본값 설정
+            if volatility_pct == 0:
+                volatility_pct = 2.0
+                atr = current_price * 0.02
+
+            if volatility_pct > 5:
+                volatility_desc = "높은 변동성"
+                vol_color = "🔴"
+            elif volatility_pct > 2:
+                volatility_desc = "보통 변동성"
+                vol_color = "🟡"
+            else:
+                volatility_desc = "낮은 변동성"
+                vol_color = "🟢"
+
+            # 권장 손절가 (ATR 기반)
+            if atr > 0 and current_price > 0:
+                # ATR × 1.5를 사용한 손절가
+                stop_loss_atr = atr * 1.5
+                if weighted_score > 0:  # 매수 신호인 경우
+                    stop_loss_price = current_price - stop_loss_atr
+                else:  # 매도 신호인 경우
+                    stop_loss_price = current_price + stop_loss_atr
+                stop_loss_pct = (stop_loss_atr / current_price * 100)
+            else:
+                # ATR이 없는 경우 기본 3% 손절가
+                stop_loss_pct = 3.0
+                if weighted_score > 0:
+                    stop_loss_price = current_price * (1 - stop_loss_pct / 100)
+                else:
+                    stop_loss_price = current_price * (1 + stop_loss_pct / 100)
+
+            return {
+                "overall_risk": f"{risk_color} {risk_level}",
+                "volatility": f"{vol_color} {volatility_desc} ({volatility_pct:.1f}%)",
+                "recommended_stop_loss": f"${stop_loss_price:,.2f} ({stop_loss_pct:.1f}%)",
+                "confidence_level": f"{'높음' if regime_confidence > 0.7 else '보통' if regime_confidence > 0.4 else '낮음'} ({regime_confidence:.1%})",
+                "summary": f"전체 리스크는 {risk_level}이며, 변동성은 {volatility_desc}입니다. 권장 손절가는 ${stop_loss_price:,.2f}입니다."
+            }
+        except Exception as e:
+            logger.error(f"리스크 평가 생성 실패: {str(e)}")
+            return {"error": "리스크 평가 생성 실패"}
 
     async def health_check(self) -> Dict[str, Any]:
         """서비스 헬스체크"""

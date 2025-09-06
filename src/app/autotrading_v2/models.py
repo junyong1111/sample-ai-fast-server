@@ -33,36 +33,14 @@ class QuantitativeResponse(BaseModel):
     timeframe: str = Field(..., description="시간프레임")
     timestamp: str = Field(..., description="분석 시간")
 
-    # 레짐 정보
-    regime: str = Field(..., description="시장 레짐 (trend/range/transition)")
-    regime_confidence: float = Field(..., description="레짐 신뢰도 (0-1)")
-    regime_info: Dict[str, Any] = Field(..., description="레짐 상세 정보")
+    # === 인간 친화적 분석 결과 ===
+    analysis: Dict[str, Any] = Field(..., description="인간 친화적 분석 결과")
 
-    # 기술적 지표
-    indicators: Dict[str, Any] = Field(..., description="기술적 지표 값들")
-
-    # 점수 정보
-    scores: Dict[str, float] = Field(..., description="지표별 점수 (-1 ~ +1)")
-    weighted_score: float = Field(..., description="가중치 적용 최종 점수")
-
-    # 거래 신호
-    signal: str = Field(..., description="거래 신호 (BUY/SELL/HOLD)")
-    confidence: float = Field(..., description="신호 신뢰도 (0-1)")
+    # === 상세 데이터 (AI/시스템용) ===
+    detailed_data: Dict[str, Any] = Field(..., description="상세 데이터 (AI/시스템용)")
 
     # 메타데이터
     metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
-
-    @validator('regime_confidence', 'confidence')
-    def validate_confidence(cls, v):
-        if not 0 <= v <= 1:
-            raise ValueError('신뢰도는 0-1 사이의 값이어야 합니다')
-        return v
-
-    @validator('weighted_score')
-    def validate_weighted_score(cls, v):
-        if not -1 <= v <= 1:
-            raise ValueError('가중치 점수는 -1 ~ +1 사이의 값이어야 합니다')
-        return v
 
 
 class OnchainRequest(BaseModel):
