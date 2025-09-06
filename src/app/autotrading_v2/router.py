@@ -67,44 +67,6 @@ async def analyze_quantitative_indicators(
         )
 
 
-@router.get(
-    "/quantitative/analyze",
-    summary="정량지표 분석 (GET 방식)",
-    description="GET 방식으로 간단한 정량지표 분석을 수행합니다."
-)
-async def analyze_quantitative_simple(
-    market: str = Query(..., description="거래 마켓 (예: BTC/USDT)"),
-    timeframe: str = Query("minutes:60", description="시간프레임"),
-    count: int = Query(200, description="캔들 개수"),
-    exchange: str = Query("binance", description="거래소"),
-    testnet: bool = Query(True, description="테스트넷 사용 여부")
-):
-    """
-    간단한 정량지표 분석 (GET 방식)
-
-    N8n에서 GET 요청으로 쉽게 호출할 수 있습니다.
-    """
-    try:
-        result = await quantitative_service.analyze_market(
-            market=market,
-            timeframe=timeframe,
-            count=count,
-            exchange=exchange,
-            testnet=testnet
-        )
-
-        return {
-            "status": "success",
-            "data": result,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
 
 
 @router.get(
@@ -254,6 +216,7 @@ async def health_check():
         health_status = await quantitative_service.health_check()
 
         return HealthCheckResponse(
+            error=None,
             status="healthy",
             service="autotrading_v2",
             timestamp=datetime.now(timezone.utc).isoformat(),
@@ -272,121 +235,3 @@ async def health_check():
         )
 
 
-@router.get(
-    "/status",
-    summary="서비스 상태 조회",
-    description="각 단계별 구현 상태를 조회합니다."
-)
-async def get_service_status():
-    """서비스 상태 조회"""
-    return {
-        "status": "success",
-        "service": "autotrading_v2",
-        "version": "2.0.0",
-        "stages": {
-            "stage_1_quantitative": {
-                "status": "completed",
-                "description": "정량지표 (차트기반) 분석",
-                "endpoints": [
-                    "POST /v2/quantitative/analyze",
-                    "GET /v2/quantitative/analyze",
-                    "GET /v2/quantitative/indicators",
-                    "GET /v2/quantitative/regime-weights"
-                ]
-            },
-            "stage_2_onchain": {
-                "status": "pending",
-                "description": "온체인 지표 분석",
-                "endpoints": ["POST /v2/onchain/analyze"]
-            },
-            "stage_3_offchain": {
-                "status": "pending",
-                "description": "오프체인 지표 분석",
-                "endpoints": ["POST /v2/offchain/analyze"]
-            },
-            "stage_4_integration": {
-                "status": "pending",
-                "description": "통합 분석 및 포지션 관리",
-                "endpoints": ["POST /v2/integration/analyze"]
-            },
-            "stage_5_dashboard": {
-                "status": "pending",
-                "description": "대시보드 및 모니터링",
-                "endpoints": ["POST /v2/dashboard"]
-            }
-        },
-        "features": {
-            "ta_lib": "✅ TA-Lib 기반 고성능 지표 계산",
-            "regime_detection": "✅ 추세장/횡보장 자동 감지",
-            "weighted_scoring": "✅ 레짐별 가중치 적용",
-            "n8n_compatible": "✅ N8n 에이전트 호환 API",
-            "error_handling": "✅ 강화된 에러 처리",
-            "caching": "✅ 지표 계산 결과 캐싱"
-        },
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
-
-
-@router.get(
-    "/n8n/example",
-    summary="N8n 연동 예시",
-    description="N8n에서 사용할 수 있는 API 호출 예시를 제공합니다."
-)
-async def get_n8n_examples():
-    """N8n 연동 예시"""
-    return {
-        "status": "success",
-        "n8n_examples": {
-            "quantitative_analysis": {
-                "method": "GET",
-                "url": "/v2/quantitative/analyze",
-                "parameters": {
-                    "market": "BTC/USDT",
-                    "timeframe": "minutes:60",
-                    "count": 200,
-                    "exchange": "binance",
-                    "testnet": True
-                },
-                "description": "정량지표 분석 (GET 방식)"
-            },
-            "quantitative_analysis_post": {
-                "method": "POST",
-                "url": "/v2/quantitative/analyze",
-                "body": {
-                    "market": "BTC/USDT",
-                    "timeframe": "minutes:60",
-                    "count": 200,
-                    "exchange": "binance",
-                    "testnet": True
-                },
-                "description": "정량지표 분석 (POST 방식)"
-            },
-            "health_check": {
-                "method": "GET",
-                "url": "/v2/health",
-                "parameters": {},
-                "description": "서비스 헬스체크"
-            }
-        },
-        "response_format": {
-            "success": {
-                "status": "success",
-                "data": {
-                    "regime": "trend",
-                    "regime_confidence": 0.85,
-                    "indicators": {"rsi": 65.2, "macd": 0.8},
-                    "scores": {"momentum": 0.6, "rsi": -0.2},
-                    "weighted_score": 0.35,
-                    "signal": "BUY",
-                    "confidence": 0.75
-                },
-                "timestamp": "2024-01-01T00:00:00Z"
-            },
-            "error": {
-                "status": "error",
-                "error": "에러 메시지",
-                "timestamp": "2024-01-01T00:00:00Z"
-            }
-        },
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
