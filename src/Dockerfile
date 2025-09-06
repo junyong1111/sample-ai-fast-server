@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates wget gnupg \
       fonts-noto-cjk \
+      build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Playwright 설치 (크로미움 포함 의존성 자동 설치)

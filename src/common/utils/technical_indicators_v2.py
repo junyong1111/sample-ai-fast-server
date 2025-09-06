@@ -385,6 +385,9 @@ class TechnicalIndicatorsV2:
 
     def _calculate_rsi(self, prices: np.ndarray, period: int) -> np.ndarray:
         """RSI 직접 구현"""
+        if len(prices) < period + 1:
+            return np.full(len(prices), np.nan)
+
         delta = np.diff(prices)
         gain = np.where(delta > 0, delta, 0)
         loss = np.where(delta < 0, -delta, 0)
@@ -396,15 +399,29 @@ class TechnicalIndicatorsV2:
         rs = avg_gain / (avg_loss + 1e-12)
         rsi = 100 - (100 / (1 + rs))
 
-        # 첫 번째 값은 NaN
+        # 첫 번째 값은 NaN으로 패딩하여 원본 길이 맞추기
         rsi = np.insert(rsi, 0, np.nan)
+
+        # 길이 확인 및 조정
+        if len(rsi) != len(prices):
+            rsi = np.resize(rsi, len(prices))
+            rsi[:len(rsi)-len(prices)] = np.nan
 
         return rsi
 
     def _calculate_stochastic(self, high: np.ndarray, low: np.ndarray, close: np.ndarray, k_period: int, k_smooth: int, d_period: int) -> Tuple[np.ndarray, np.ndarray]:
         """Stochastic 직접 구현"""
+        if len(high) < k_period or len(low) < k_period or len(close) < k_period:
+            return np.full(len(close), np.nan), np.full(len(close), np.nan)
+
         lowest_low = pd.Series(low).rolling(window=k_period).min().values
         highest_high = pd.Series(high).rolling(window=k_period).max().values
+
+        # 배열 크기 확인 및 조정
+        min_length = min(len(close), len(lowest_low), len(highest_high))
+        close = close[:min_length]
+        lowest_low = lowest_low[:min_length]
+        highest_high = highest_high[:min_length]
 
         k_percent = 100 * ((close - lowest_low) / (highest_high - lowest_low + 1e-12))
         k_percent = pd.Series(k_percent).rolling(window=k_smooth).mean().values
@@ -414,8 +431,17 @@ class TechnicalIndicatorsV2:
 
     def _calculate_williams_r(self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
         """Williams %R 직접 구현"""
+        if len(high) < period or len(low) < period or len(close) < period:
+            return np.full(len(close), np.nan)
+
         highest_high = pd.Series(high).rolling(window=period).max().values
         lowest_low = pd.Series(low).rolling(window=period).min().values
+
+        # 배열 크기 확인 및 조정
+        min_length = min(len(close), len(highest_high), len(lowest_low))
+        close = close[:min_length]
+        highest_high = highest_high[:min_length]
+        lowest_low = lowest_low[:min_length]
 
         williams_r = -100 * ((highest_high - close) / (highest_high - lowest_low + 1e-12))
 
@@ -423,9 +449,18 @@ class TechnicalIndicatorsV2:
 
     def _calculate_cci(self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int) -> np.ndarray:
         """CCI 직접 구현"""
+        if len(high) < period or len(low) < period or len(close) < period:
+            return np.full(len(close), np.nan)
+
         typical_price = (high + low + close) / 3
         sma = pd.Series(typical_price).rolling(window=period).mean().values
         mad = pd.Series(np.abs(typical_price - sma)).rolling(window=period).mean().values
+
+        # 배열 크기 확인 및 조정
+        min_length = min(len(typical_price), len(sma), len(mad))
+        typical_price = typical_price[:min_length]
+        sma = sma[:min_length]
+        mad = mad[:min_length]
 
         cci = (typical_price - sma) / (0.015 * mad + 1e-12)
 
@@ -433,6 +468,9 @@ class TechnicalIndicatorsV2:
 
     def _wilders_smoothing(self, data: np.ndarray, period: int) -> np.ndarray:
         """Wilder's smoothing 직접 구현"""
+        if len(data) == 0:
+            return np.array([])
+
         smoothed = np.zeros_like(data)
         smoothed[0] = data[0]
 
@@ -445,8 +483,17 @@ class TechnicalIndicatorsV2:
 
     def _calculate_bollinger_bands(self, close: np.ndarray, period: int, std_dev: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Bollinger Bands 직접 구현"""
+        if len(close) < period:
+            return np.full(len(close), np.nan), np.full(len(close), np.nan), np.full(len(close), np.nan)
+
         sma = pd.Series(close).rolling(window=period).mean().values
         std = pd.Series(close).rolling(window=period).std().values
+
+        # 배열 크기 확인 및 조정
+        min_length = min(len(close), len(sma), len(std))
+        close = close[:min_length]
+        sma = sma[:min_length]
+        std = std[:min_length]
 
         upper_band = sma + (std * std_dev)
         lower_band = sma - (std * std_dev)

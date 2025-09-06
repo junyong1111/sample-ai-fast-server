@@ -125,8 +125,8 @@ async def analyze_risk(
         ...,
         example={
             "market": "BTC/USDT",
-            "timeframe": "minutes:5",
-            "count": 200,
+            "analysis_type": "daily",
+            "days_back": 90,
             "personality": "neutral",
             "include_analysis": True
         }
@@ -142,7 +142,7 @@ async def analyze_risk(
         service = get_risk_service()
         result = await service.analyze_risk(
             market=request.market,
-            timeframe=request.timeframe,
+            analysis_type=request.analysis_type,
             days_back=request.days_back,
             personality=request.personality,
             include_analysis=request.include_analysis

@@ -10,39 +10,19 @@ import numpy as np
 
 
 class RiskAnalysisRequest(BaseModel):
-    """리스크 분석 요청 모델 (웹훅 호환)"""
+    """리스크 분석 요청 모델 (장기 시장 환경 분석용)"""
     market: str = Field(..., description="분석할 마켓 (예: BTC/USDT)")
-    timeframe: str = Field("1d", description="시간프레임 (minutes:5, 1h, 4h, 1d 등)")
-    count: int = Field(200, description="데이터 포인트 수 (웹훅 파라미터)")
+    analysis_type: Literal["daily", "weekly"] = Field("daily", description="분석 유형 (일봉/주봉)")
+    days_back: int = Field(90, description="조회 기간 (일) - 장기 분석용")
     personality: Literal["conservative", "neutral", "aggressive"] = Field("neutral", description="투자 성향")
     include_analysis: bool = Field(True, description="AI 분석 포함 여부")
-    days_back: int = Field(30, description="조회 기간 (일) - 자동 계산됨")
 
-    @validator('count')
-    def validate_count(cls, v):
-        if v < 50:
-            raise ValueError('count는 최소 50 이상이어야 합니다')
-        if v > 1000:
-            raise ValueError('count는 최대 1000 이하여야 합니다')
-        return v
-
-    @validator('timeframe')
-    def validate_timeframe(cls, v, values):
-        # timeframe을 days_back으로 변환하는 로직
-        count = values.get('count', 200)
-        if v.startswith('minutes:'):
-            # 5분봉의 경우, count * 5분을 일수로 변환
-            minutes = int(v.split(':')[1])
-            days = (minutes * count) / (24 * 60)  # 분을 일로 변환
-            values['days_back'] = max(7, int(days))  # 최소 7일
-        elif v == "1h":
-            values['days_back'] = max(7, count // 24)  # 시간봉 기준
-        elif v == "4h":
-            values['days_back'] = max(7, count // 6)   # 4시간봉 기준
-        elif v == "1d":
-            values['days_back'] = max(7, count)        # 일봉 기준
-        else:
-            values['days_back'] = 30  # 기본값
+    @validator('days_back')
+    def validate_days_back(cls, v):
+        if v < 30:
+            raise ValueError('장기 분석을 위해 최소 30일 이상이어야 합니다')
+        if v > 365:
+            raise ValueError('최대 365일 이하여야 합니다')
         return v
 
 

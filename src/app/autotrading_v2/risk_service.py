@@ -75,29 +75,29 @@ class RiskAnalysisService:
     async def analyze_risk(
         self,
         market: str,
-        timeframe: str = "1d",
-        days_back: int = 30,
+        analysis_type: str = "daily",
+        days_back: int = 90,
         personality: str = "neutral",
         include_analysis: bool = True
     ) -> Dict[str, Any]:
         """
-        리스크 분석 실행 (웹훅 호환)
+        장기 시장 환경 리스크 분석 실행
 
         Args:
             market: 분석할 마켓 (예: BTC/USDT)
-            timeframe: 시간프레임 (minutes:5, 1h, 4h, 1d 등)
-            days_back: 조회 기간 (일)
+            analysis_type: 분석 유형 (daily, weekly)
+            days_back: 조회 기간 (일) - 장기 분석용
             personality: 투자 성향 (conservative, neutral, aggressive)
             include_analysis: AI 분석 포함 여부
 
         Returns:
-            Dict[str, Any]: 분석 결과
+            Dict[str, Any]: 장기 시장 환경 분석 결과
         """
         try:
-            logger.info(f"🚀 리스크 분석 시작: {market} | {timeframe} | {days_back}일")
+            logger.info(f"🚀 장기 시장 환경 분석 시작: {market} | {analysis_type} | {days_back}일")
 
-            # ===== 1단계: 시장 데이터 수집 =====
-            market_data = await self._collect_market_data(days_back)
+            # ===== 1단계: 장기 시장 환경 데이터 수집 =====
+            market_data = await self._collect_market_data(days_back, analysis_type)
 
             # ===== 2단계: 리스크 지표 계산 =====
             risk_indicators = self._calculate_risk_indicators(market_data)
@@ -152,7 +152,7 @@ class RiskAnalysisService:
                 # 메타데이터
                 "metadata": {
                     "analysis_period": f"{days_back}일",
-                    "timeframe": timeframe,
+                    "analysis_type": analysis_type,
                     "ai_analysis_included": ai_analysis is not None,
                     "data_points": 0  # MarketData는 단일 값이므로 길이 개념이 없음
                 }
@@ -169,15 +169,28 @@ class RiskAnalysisService:
                 "status": "error",
                 "market": market,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "error": str(e),
+                "market_data": {},
+                "risk_indicators": {},
+                "correlation_analysis": {},
+                "ai_analysis": None,
                 "market_risk_level": "UNKNOWN",
                 "risk_off_signal": False,
-                "confidence": 0.0
+                "confidence": 0.0,
+                "recommendations": None,
+                "metadata": {"error": str(e)}
             }
 
-    async def _collect_market_data(self, days_back: int) -> MarketData:
-        """시장 데이터 수집"""
+    async def _collect_market_data(self, days_back: int, analysis_type: str = "daily") -> MarketData:
+        """장기 시장 환경 데이터 수집"""
         try:
+            # 장기 분석을 위해 더 긴 기간 설정
+            if analysis_type == "weekly":
+                # 주봉 분석: 최소 6개월 데이터
+                days_back = max(days_back, 180)
+            else:
+                # 일봉 분석: 최소 3개월 데이터
+                days_back = max(days_back, 90)
+
             end_date = datetime.now()
             start_date = end_date - timedelta(days=days_back)
 

@@ -168,7 +168,8 @@ class QuantitativeServiceV2:
                 "market": market,
                 "timeframe": timeframe,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "error": str(e),
+                "analysis": {},
+                "detailed_data": {},
                 "regime": "unknown",
                 "regime_confidence": 0.0,
                 "regime_info": {},
@@ -177,7 +178,7 @@ class QuantitativeServiceV2:
                 "weighted_score": 0.0,
                 "signal": "HOLD",
                 "confidence": 0.0,
-                "metadata": {}
+                "metadata": {"error": str(e)}
             }
 
     async def _get_ohlcv_data(
@@ -588,13 +589,13 @@ class QuantitativeServiceV2:
     async def health_check(self) -> Dict[str, Any]:
         """서비스 헬스체크"""
         try:
-            # 기본 지표 계산 테스트
+            # 기본 지표 계산 테스트 (실제 데이터 크기와 맞춤)
             test_data = pd.DataFrame({
-                'open': np.random.randn(100) + 100,
-                'high': np.random.randn(100) + 101,
-                'low': np.random.randn(100) + 99,
-                'close': np.random.randn(100) + 100,
-                'volume': np.random.randn(100) + 1000
+                'open': np.random.randn(200) + 100,
+                'high': np.random.randn(200) + 101,
+                'low': np.random.randn(200) + 99,
+                'close': np.random.randn(200) + 100,
+                'volume': np.random.randn(200) + 1000
             })
 
             # 지표 계산 테스트
