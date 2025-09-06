@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     model_config = {
         "extra": "allow",  # 추가 필드 허용
-        "env_file": f"{Path(__file__).parent.parent.parent}/.env"
+        "env_file": f"{Path(__file__).parent.parent}/.env"
     }
 
 # 인스턴스 생성

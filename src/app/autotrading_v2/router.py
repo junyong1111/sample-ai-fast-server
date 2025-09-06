@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 from .quantitative_service import QuantitativeServiceV2
+from .risk_service import RiskAnalysisService
 from .models import (
     QuantitativeRequest, QuantitativeResponse,
     OnchainRequest, OnchainResponse,
@@ -16,12 +17,21 @@ from .models import (
     DashboardRequest, DashboardResponse,
     HealthCheckResponse, ErrorResponse
 )
+from .risk_models import RiskAnalysisRequest, RiskAnalysisResponse
 
 # 라우터 생성
 router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
 
 # 서비스 인스턴스
 quantitative_service = QuantitativeServiceV2()
+risk_service = None  # 지연 초기화
+
+def get_risk_service():
+    """리스크 분석 서비스 지연 초기화"""
+    global risk_service
+    if risk_service is None:
+        risk_service = RiskAnalysisService()
+    return risk_service
 
 
 # ===== 1단계: 정량지표 (차트기반) =====
@@ -102,7 +112,80 @@ async def get_regime_weights():
     }
 
 
-# ===== 2단계: 온체인 지표 (준비 중) =====
+# ===== 2단계: 리스크 분석 에이전트 =====
+
+@router.post(
+    "/risk/analyze",
+    response_model=RiskAnalysisResponse,
+    summary="리스크 분석 (N8n 호환)",
+    description="yfinance, LangChain, LangGraph를 활용하여 시장 리스크를 분석하고 요약합니다."
+)
+async def analyze_risk(
+    request: RiskAnalysisRequest = Body(
+        ...,
+        example={
+            "market": "BTC/USDT",
+            "timeframe": "minutes:5",
+            "count": 200,
+            "personality": "neutral",
+            "include_analysis": True
+        }
+    )
+):
+    """
+    리스크 분석 실행 (POST 방식)
+
+    N8n에서 정기적으로 호출하여 시장 리스크를 분석합니다.
+    """
+    try:
+        # 지연 초기화된 서비스 사용
+        service = get_risk_service()
+        result = await service.analyze_risk(
+            market=request.market,
+            timeframe=request.timeframe,
+            days_back=request.days_back,
+            personality=request.personality,
+            include_analysis=request.include_analysis
+        )
+
+        return RiskAnalysisResponse(**result)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"리스크 분석 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/risk/health",
+    summary="리스크 분석 서비스 헬스체크",
+    description="리스크 분석 서비스의 상태를 확인합니다."
+)
+async def risk_health_check():
+    """리스크 분석 서비스 헬스체크"""
+    try:
+        # 지연 초기화된 서비스 사용
+        service = get_risk_service()
+        health_status = await service.health_check()
+
+        return {
+            "status": "success",
+            "service": "risk_analysis",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": health_status
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "service": "risk_analysis",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": str(e)
+        }
+
+
+# ===== 3단계: 온체인 지표 (준비 중) =====
 
 @router.post(
     "/onchain/analyze",
@@ -213,15 +296,28 @@ async def get_dashboard_data(request: DashboardRequest):
 async def health_check():
     """서비스 헬스체크"""
     try:
-        health_status = await quantitative_service.health_check()
+        # 정량지표 서비스 헬스체크
+        quant_health = await quantitative_service.health_check()
+
+        # 리스크 분석 서비스 헬스체크
+        risk_service_instance = get_risk_service()
+        risk_health = await risk_service_instance.health_check()
+
+        # 통합 헬스체크 상태
+        overall_status = "healthy"
+        if quant_health.get("indicators_calculation") == "error" or risk_health.get("data_collection") == "error":
+            overall_status = "unhealthy"
 
         return HealthCheckResponse(
             error=None,
-            status="healthy",
+            status=overall_status,
             service="autotrading_v2",
             timestamp=datetime.now(timezone.utc).isoformat(),
             version="2.0.0",
-            details=health_status
+            details={
+                "quantitative_service": quant_health,
+                "risk_analysis_service": risk_health
+            }
         )
 
     except Exception as e:

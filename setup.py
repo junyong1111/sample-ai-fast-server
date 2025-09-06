@@ -26,6 +26,14 @@ setup(
 
         #postgres db
         "asyncpg>=0.29.0",
+
+        # 리스크 분석 에이전트 의존성
+        "yfinance>=0.2.28",                    # 야후 파이낸스 데이터
+        "langchain>=0.1.0",                    # 랭체인
+        "langchain-openai>=0.1.0",             # OpenAI 통합
+        "langgraph>=0.1.0",                    # 랭그래프
+        "scipy>=1.11.0",                       # 상관관계 계산
+        "scikit-learn>=1.3.0",                 # 머신러닝 유틸리티
     ],
     entry_points={
         "console_scripts": [
