@@ -66,64 +66,99 @@ class QuantitativeServiceV2:
             Dict[str, Any]: 분석 결과
         """
         try:
-            logger.info(f"정량지표 분석 시작: {market} ({timeframe}, {count}개)")
+            logger.info("🚀 [1단계] 정량지표 분석 시작")
+            logger.info(f"📊 {market} | {timeframe} | {count}개 캔들 | {exchange}")
 
-            # 1. OHLCV 데이터 수집
+            # ===== 1단계-1: OHLCV 데이터 수집 =====
             ohlcv_df = await self._get_ohlcv_data(market, timeframe, count, exchange, testnet)
 
             if ohlcv_df is None or len(ohlcv_df) == 0:
                 raise ValueError(f"OHLCV 데이터를 가져올 수 없습니다: {market}")
 
-            # 2. 기술적 지표 계산
+            logger.info(f"✅ 데이터 수집: {len(ohlcv_df)}개 캔들")
+
+            # ===== 1단계-2: 기술적 지표 계산 =====
             indicators = self.indicators_calculator.calculate_all_indicators(
                 ohlcv_df, self.indicator_config
             )
+            logger.info(f"✅ 지표 계산: {len(indicators)}개 지표")
 
-            # 3. 레짐 감지
+            # ===== 1단계-3: 레짐 감지 (시장 환경 구분) =====
             regime, regime_confidence, regime_info = self.regime_detector.detect_regime(indicators)
 
-            # 4. 지표별 점수 계산
+            # ===== 1단계-4: 지표별 점수화 (-1 ~ +1 스케일) =====
             scores = self.score_calculator.calculate_all_scores(indicators)
 
-            # 5. 가중치 적용 점수 계산
+            # ===== 1단계-5: 레짐별 가중치 적용 =====
             weighted_score = self._calculate_weighted_score(scores, regime)
 
-            # 6. 거래 신호 생성
-            signal, signal_confidence = self._generate_trading_signal(weighted_score, regime_confidence)
+            # 가중치 정보 로그
+            weights = self.regime_detector.get_regime_weights(regime)
+            if regime == "trend":
+                logger.info(f"추세장 가중치: 모멘텀({weights['momentum']:.2f}) + MACD({weights['macd']:.2f}) + 변동성({weights['return_volatility']:.2f}) + 거래량({weights['volume']:.2f})")
+            elif regime == "range":
+                logger.info(f"횡보장 가중치: RSI({weights['rsi']:.2f}) + 볼린저({weights['bollinger']:.2f}) + 거래량({weights['volume']:.2f}) + 모멘텀({weights['momentum']:.2f})")
+            else:
+                logger.info(f"전환구간 가중치: 절충 적용")
 
-            # 7. 결과 구성
+            # ===== 1단계-6: 거래 신호 생성 =====
+            signal, signal_confidence, position_size, position_percentage = self._generate_trading_signal(weighted_score, regime_confidence)
+
+            # ===== 1단계-7: 결과 구성 =====
             result = {
                 "status": "success",
                 "market": market,
                 "timeframe": timeframe,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
 
-                # 레짐 정보
-                "regime": regime,
-                "regime_confidence": regime_confidence,
-                "regime_info": regime_info,
+                # === 인간 친화적 분석 결과 ===
+                "analysis": {
+                    # 시장 상황 요약
+                    "market_condition": self._get_market_condition_summary(regime, regime_confidence, indicators),
+                    
+                    # 거래 신호 및 권장사항
+                    "trading_recommendation": self._get_trading_recommendation(signal, weighted_score, position_size, position_percentage, signal_confidence),
+                    
+                    # 주요 지표 해석
+                    "key_indicators": self._get_key_indicators_summary(indicators, scores),
+                    
+                    # 리스크 평가
+                    "risk_assessment": self._get_risk_assessment(weighted_score, regime_confidence, indicators)
+                },
 
-                # 기술적 지표 (최신 값만)
-                "indicators": self._extract_latest_indicators(indicators),
+                # === 상세 데이터 (AI/시스템용) ===
+                "detailed_data": {
+                    # 레짐 정보
+                    "regime": regime,
+                    "regime_confidence": regime_confidence,
+                    "regime_info": regime_info,
 
-                # 점수 정보
-                "scores": scores,
-                "weighted_score": weighted_score,
+                    # 기술적 지표 (최신 값만)
+                    "indicators": self._extract_latest_indicators(indicators),
 
-                # 거래 신호
-                "signal": signal,
-                "confidence": signal_confidence,
+                    # 점수 정보
+                    "scores": scores,
+                    "weighted_score": weighted_score,
 
-                # 메타데이터
-                "metadata": {
-                    "data_points": len(ohlcv_df),
-                    "config": self.indicator_config,
-                    "exchange": exchange,
-                    "testnet": testnet
+                    # 거래 신호
+                    "signal": signal,
+                    "confidence": signal_confidence,
+                    "position_size": position_size,
+                    "position_percentage": position_percentage,
+
+                    # 메타데이터
+                    "metadata": {
+                        "data_points": len(ohlcv_df),
+                        "config": self.indicator_config,
+                        "exchange": exchange,
+                        "testnet": testnet
+                    }
                 }
             }
 
-            logger.info(f"정량지표 분석 완료: {market} - {signal} (신뢰도: {signal_confidence:.2f})")
+            logger.info("🎉 [1단계] 정량지표 분석 완료!")
+            logger.info(f"📊 결과: {signal} | 레짐: {regime} | 점수: {weighted_score:.3f} | 신뢰도: {signal_confidence:.2f}")
+            logger.info(f"💼 포지션: {position_size} ({position_percentage:.0f}%)")
             return result
 
         except Exception as e:
@@ -168,9 +203,10 @@ class QuantitativeServiceV2:
                 count=count
             )
 
-            # 데이터 검증
-            if ohlcv_df is None or len(ohlcv_df) < 50:
-                raise ValueError(f"충분한 데이터가 없습니다: {len(ohlcv_df) if ohlcv_df is not None else 0}개")
+            # 데이터 검증 (최소 20개로 줄임)
+            min_required = 50
+            if ohlcv_df is None or len(ohlcv_df) < min_required:
+                raise ValueError(f"충분한 데이터가 없습니다: {len(ohlcv_df) if ohlcv_df is not None else 0}개 (최소 {min_required}개 필요)")
 
             # 필요한 컬럼 확인
             required_columns = ['open', 'high', 'low', 'close', 'volume']
@@ -181,8 +217,8 @@ class QuantitativeServiceV2:
             # NaN 값 처리
             ohlcv_df = ohlcv_df.dropna()
 
-            if len(ohlcv_df) < 50:
-                raise ValueError(f"NaN 제거 후 데이터가 부족합니다: {len(ohlcv_df)}개")
+            if len(ohlcv_df) < min_required:
+                raise ValueError(f"NaN 제거 후 데이터가 부족합니다: {len(ohlcv_df)}개 (최소 {min_required}개 필요)")
 
             return ohlcv_df
 
@@ -235,8 +271,8 @@ class QuantitativeServiceV2:
             logger.error(f"가중치 점수 계산 실패: {str(e)}")
             return 0.0
 
-    def _generate_trading_signal(self, weighted_score: float, regime_confidence: float) -> Tuple[str, float]:
-        """거래 신호 생성"""
+    def _generate_trading_signal(self, weighted_score: float, regime_confidence: float) -> Tuple[str, float, str, float]:
+        """거래 신호 및 포지션 관리 생성"""
         try:
             # 신호 임계값
             buy_threshold = 0.3
@@ -250,16 +286,27 @@ class QuantitativeServiceV2:
             else:
                 signal = "HOLD"
 
+            # 포지션 크기 결정 (요구사항에 따라)
+            if abs(weighted_score) >= 0.6:
+                position_size = "FULL"  # 100%
+                position_percentage = 100.0
+            elif abs(weighted_score) >= 0.3:
+                position_size = "HALF"  # 50%
+                position_percentage = 50.0
+            else:
+                position_size = "HOLD"  # 관망
+                position_percentage = 0.0
+
             # 신뢰도 계산
             # 가중치 점수의 절댓값이 클수록, 레짐 신뢰도가 높을수록 신호 신뢰도 증가
             score_confidence = min(1.0, abs(weighted_score))
             signal_confidence = (score_confidence * 0.7 + regime_confidence * 0.3)
 
-            return signal, signal_confidence
+            return signal, signal_confidence, position_size, position_percentage
 
         except Exception as e:
             logger.error(f"거래 신호 생성 실패: {str(e)}")
-            return "HOLD", 0.0
+            return "HOLD", 0.0, "HOLD", 0.0
 
     async def health_check(self) -> Dict[str, Any]:
         """서비스 헬스체크"""

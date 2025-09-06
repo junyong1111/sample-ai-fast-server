@@ -18,7 +18,7 @@ from .models import (
 )
 
 # 라우터 생성
-router = APIRouter(prefix="/v2", tags=["🚀 Autotrading V2"])
+router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
 
 # 서비스 인스턴스
 quantitative_service = QuantitativeServiceV2()

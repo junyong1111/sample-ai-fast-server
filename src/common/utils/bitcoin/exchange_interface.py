@@ -83,11 +83,16 @@ class ExchangeFactory:
             secret: 시크릿 키
             testnet: 테스트넷 사용 여부 (바이낸스만 해당)
         """
+
         if exchange_type.lower() == "upbit":
             from .upbit import PyUpbitUtils
             return PyUpbitUtils()
         elif exchange_type.lower() == "binance":
             from .binace import BinanceUtils
+            if not api_key or not secret:
+                api_key = '6Xth53LQplDzgQTc506YdpmsuJA9yoVdXFlLvomAz6j8LBR2ZCW9nhBvJSf8BFr9'
+                secret = 'xRsqSJTNj3SE4FvRUaaD6uMam2TwDuBKClloyxdwsvhF4NzOwnfC5Dmb7iO0syGu'
+
             return BinanceUtils(api_key=api_key, secret=secret, testnet=testnet)
         else:
             raise ValueError(f"Unsupported exchange type: {exchange_type}. Use 'upbit' or 'binance'")

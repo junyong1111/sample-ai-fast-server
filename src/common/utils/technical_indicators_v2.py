@@ -9,10 +9,12 @@ from typing import Dict, Any, Tuple, Optional, List
 from datetime import datetime
 import warnings
 
+from src.common.utils.logger import set_logger
+
 # TA-Lib 경고 무시
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
-
+logger = set_logger("technical_indicators_v2")
 class TechnicalIndicatorsV2:
     """TA-Lib 기반 기술적 지표 계산 클래스 V2"""
 
@@ -43,6 +45,11 @@ class TechnicalIndicatorsV2:
         low = ohlcv_df['low'].values.astype(np.float64)
         close = ohlcv_df['close'].values.astype(np.float64)
         volume = ohlcv_df['volume'].values.astype(np.float64)
+
+        # 데이터 길이 확인
+        data_length = len(close)
+        if data_length < 20:
+            logger.warning(f"데이터가 부족합니다: {data_length}개 (일부 지표는 정확하지 않을 수 있음)")
 
         # 기본 지표 계산
         indicators = {}
@@ -560,17 +567,20 @@ class RegimeDetectorV2:
             # ADX가 높을수록 신뢰도 증가
             confidence = min(1.0, (latest_adx - adx_threshold_high) / 20.0)
             regime_info['trend_strength'] = 'strong' if latest_adx > 40 else 'moderate'
+            logger.info(f"현재 ADX: {latest_adx:.0f} | ADX > {adx_threshold_high} → 추세장 (모멘텀, MACD 가중치 증가)")
         # 횡보장 판별
         elif latest_adx < adx_threshold_low:
             regime = "range"
             # ADX가 낮을수록 신뢰도 증가
             confidence = min(1.0, (adx_threshold_low - latest_adx) / 10.0)
             regime_info['range_strength'] = 'strong' if latest_adx < 15 else 'moderate'
+            logger.info(f"현재 ADX: {latest_adx:.0f} | ADX < {adx_threshold_low} → 횡보장 (RSI, 볼린저 가중치 증가)")
         # 전환 구간
         else:
             regime = "transition"
             confidence = 0.5
             regime_info['transition_zone'] = True
+            logger.info(f"현재 ADX: {latest_adx:.0f} | ADX {adx_threshold_low}-{adx_threshold_high} → 전환구간 (절충 가중치)")
 
         regime_info['regime'] = regime
         regime_info['confidence'] = confidence
@@ -604,7 +614,7 @@ class ScoreCalculatorV2:
             try:
                 scores[indicator_name] = score_func(indicators)
             except Exception as e:
-                print(f"Warning: Failed to calculate {indicator_name} score: {e}")
+                logger.warning(f"{indicator_name} 점수 계산 실패: {e}")
                 scores[indicator_name] = 0.0
 
         return scores
