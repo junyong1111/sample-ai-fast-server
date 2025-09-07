@@ -9,15 +9,12 @@ from datetime import datetime, timezone
 
 from .quantitative_service import QuantitativeServiceV2
 from .risk_service import RiskAnalysisService
+from .balance_service import BalanceService
 from .models import (
-    QuantitativeRequest, QuantitativeResponse,
-    OnchainRequest, OnchainResponse,
-    OffchainRequest, OffchainResponse,
-    IntegrationRequest, IntegrationResponse,
-    DashboardRequest, DashboardResponse,
-    HealthCheckResponse, ErrorResponse
+    HealthCheckResponse, QuantitativeRequest, QuantitativeResponse,
+    RiskAnalysisRequest, RiskAnalysisResponse,
+    BalanceRequest, BalanceResponse
 )
-from .risk_models import RiskAnalysisRequest, RiskAnalysisResponse
 
 # 라우터 생성
 router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
@@ -25,6 +22,7 @@ router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
 # 서비스 인스턴스
 quantitative_service = QuantitativeServiceV2()
 risk_service = None  # 지연 초기화
+balance_service = BalanceService()
 
 def get_risk_service():
     """리스크 분석 서비스 지연 초기화"""
@@ -183,104 +181,6 @@ async def risk_health_check():
         }
 
 
-# ===== 3단계: 온체인 지표 (준비 중) =====
-
-@router.post(
-    "/onchain/analyze",
-    response_model=OnchainResponse,
-    summary="온체인 지표 분석 (준비 중)",
-    description="온체인 데이터를 분석하여 투자심리지표를 생성합니다."
-)
-async def analyze_onchain_indicators(request: OnchainRequest):
-    """온체인 지표 분석 (준비 중)"""
-    return {
-        "status": "error",
-        "market": request.market,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "indicators": {},
-        "onchain_score": 0.0,
-        "signal": "NEUTRAL",
-        "confidence": 0.0,
-        "metadata": {"message": "온체인 지표 분석은 2단계에서 구현 예정"}
-    }
-
-
-# ===== 3단계: 오프체인 지표 (준비 중) =====
-
-@router.post(
-    "/offchain/analyze",
-    response_model=OffchainResponse,
-    summary="오프체인 지표 분석 (준비 중)",
-    description="뉴스, 소셜미디어, 거시경제 데이터를 분석하여 감성지표를 생성합니다."
-)
-async def analyze_offchain_indicators(request: OffchainRequest):
-    """오프체인 지표 분석 (준비 중)"""
-    return {
-        "status": "error",
-        "keywords": request.keywords,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "sentiment": {},
-        "offchain_score": 0.0,
-        "signal": "NEUTRAL",
-        "confidence": 0.0,
-        "metadata": {"message": "오프체인 지표 분석은 3단계에서 구현 예정"}
-    }
-
-
-# ===== 4단계: 통합 분석 (준비 중) =====
-
-@router.post(
-    "/integration/analyze",
-    response_model=IntegrationResponse,
-    summary="통합 분석 (준비 중)",
-    description="정량, 온체인, 오프체인 지표를 통합하여 최종 거래 신호를 생성합니다."
-)
-async def analyze_integration(request: IntegrationRequest):
-    """통합 분석 (준비 중)"""
-    return {
-        "status": "error",
-        "market": request.market,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "quantitative_score": 0.0,
-        "onchain_score": 0.0,
-        "offchain_score": 0.0,
-        "weights": {
-            "quant_weight": request.quant_weight,
-            "onchain_weight": request.onchain_weight,
-            "offchain_weight": request.offchain_weight
-        },
-        "final_score": 0.0,
-        "position_size": 0.0,
-        "action": "HOLD",
-        "stop_loss": None,
-        "take_profit": None,
-        "confidence": 0.0,
-        "metadata": {"message": "통합 분석은 4단계에서 구현 예정"}
-    }
-
-
-# ===== 5단계: 대시보드 (준비 중) =====
-
-@router.post(
-    "/dashboard",
-    response_model=DashboardResponse,
-    summary="대시보드 데이터 (준비 중)",
-    description="실시간 모니터링 및 성과 분석 대시보드 데이터를 제공합니다."
-)
-async def get_dashboard_data(request: DashboardRequest):
-    """대시보드 데이터 (준비 중)"""
-    return {
-        "status": "error",
-        "market": request.market,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "current_status": {},
-        "indicators_status": {},
-        "trading_signals": {},
-        "performance": {},
-        "alerts": [],
-        "history": None,
-        "metadata": {"message": "대시보드는 5단계에서 구현 예정"}
-    }
 
 
 # ===== 헬스체크 및 유틸리티 =====
@@ -327,5 +227,105 @@ async def health_check():
             details={},
             error=str(e)
         )
+
+
+# ===== 잔고 조회 =====
+
+@router.post(
+    "/balance",
+    response_model=BalanceResponse,
+    summary="현재 잔고 조회",
+    description="바이낸스 API를 통해 현재 계좌의 실시간 잔고를 조회합니다. 특정 티커를 지정하면 해당 코인만 조회합니다."
+)
+async def get_balance(
+    request: BalanceRequest = Body(
+        ...,
+        example={
+            "tickers": ["BTC", "ETH", "USDT"],
+            "include_zero_balances": False,
+            "user_id": "default_user"
+        }
+    )
+):
+    """
+    현재 잔고 조회
+
+    바이낸스 API를 통해 현재 계좌의 실시간 잔고를 조회합니다.
+    - tickers: 조회할 코인 티커 목록 (None이면 모든 잔고 조회)
+    - USDT는 자동으로 포함됩니다
+    - include_zero_balances: 0 잔고 포함 여부
+    """
+    try:
+        result = await balance_service.get_balance(request)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"잔고 조회 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/balance",
+    response_model=BalanceResponse,
+    summary="현재 잔고 조회 (GET)",
+    description="GET 방식으로 현재 잔고를 조회합니다."
+)
+async def get_balance_get(
+    tickers: Optional[str] = Query(None, description="조회할 코인 티커 목록 (쉼표로 구분, 예: BTC,ETH,USDT)"),
+    include_zero_balances: bool = Query(False, description="0 잔고 포함 여부")
+):
+    """
+    현재 잔고 조회 (GET 방식)
+
+    쿼리 파라미터를 통해 잔고를 조회합니다.
+    """
+    try:
+        # 티커 파싱
+        ticker_list = None
+        if tickers:
+            ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+
+        request = BalanceRequest(
+            tickers=ticker_list,
+            include_zero_balances=include_zero_balances,
+            user_id=None
+        )
+
+        result = await balance_service.get_balance(request)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"잔고 조회 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/balance/health",
+    summary="잔고 서비스 헬스체크",
+    description="잔고 조회 서비스의 상태를 확인합니다."
+)
+async def balance_health_check():
+    """잔고 서비스 헬스체크"""
+    try:
+        health_status = await balance_service.health_check()
+
+        return {
+            "status": "success",
+            "service": "balance_service",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": health_status
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "service": "balance_service",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": str(e)
+        }
 
 

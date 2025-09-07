@@ -221,3 +221,80 @@ class ErrorResponse(BaseModel):
     error_code: Optional[str] = Field(None, description="에러 코드")
     timestamp: str = Field(..., description="에러 발생 시간")
     details: Optional[Dict[str, Any]] = Field(None, description="에러 상세 정보")
+
+
+# === 잔고 조회 모델 ===
+class AssetBalance(BaseModel):
+    """자산 잔고 모델"""
+    asset: str = Field(..., description="자산 심볼 (예: BTC, ETH, USDT)")
+    free: float = Field(..., description="사용 가능한 잔고")
+    locked: float = Field(..., description="잠긴 잔고")
+    total: float = Field(..., description="총 잔고")
+    usdt_value: Optional[float] = Field(None, description="USDT 기준 가치")
+
+
+class BalanceRequest(BaseModel):
+    """잔고 조회 요청 모델"""
+    tickers: Optional[List[str]] = Field(None, description="조회할 코인 티커 목록 (예: ['BTC', 'ETH']). None이면 모든 잔고 조회")
+    include_zero_balances: bool = Field(False, description="0 잔고 포함 여부 (기본값: False)")
+    user_id: Optional[str] = Field(None, description="사용자 ID (현재는 강제 설정용)")
+
+    @validator('tickers')
+    def validate_tickers(cls, v):
+        if v is not None:
+            # USDT가 없으면 자동으로 추가
+            if 'USDT' not in v:
+                v.append('USDT')
+            # 중복 제거
+            v = list(set(v))
+        return v
+
+
+class BalanceResponse(BaseModel):
+    """잔고 조회 응답 모델"""
+    status: str = Field(..., description="상태 (success/error)")
+    timestamp: str = Field(..., description="조회 시간")
+
+    # 잔고 정보
+    balances: List[AssetBalance] = Field(..., description="자산별 잔고 목록")
+    total_usdt_value: float = Field(..., description="총 USDT 기준 가치")
+
+    # 요청된 티커 정보
+    requested_tickers: Optional[List[str]] = Field(None, description="요청된 티커 목록")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+# === 리스크 분석 모델 ===
+class RiskAnalysisRequest(BaseModel):
+    """리스크 분석 요청 모델"""
+    market: str = Field(..., description="거래 마켓 (예: BTC/USDT)")
+    analysis_type: Literal["daily", "weekly", "monthly"] = Field("daily", description="분석 타입")
+    days_back: int = Field(90, description="조회 기간 (일)")
+    personality: Literal["conservative", "neutral", "aggressive"] = Field("neutral", description="투자 성향")
+    include_analysis: bool = Field(True, description="상세 분석 포함 여부")
+
+    @validator('days_back')
+    def validate_days_back(cls, v):
+        if v < 7:
+            raise ValueError('days_back은 최소 7일 이상이어야 합니다')
+        if v > 365:
+            raise ValueError('days_back은 최대 365일 이하여야 합니다')
+        return v
+
+
+class RiskAnalysisResponse(BaseModel):
+    """리스크 분석 응답 모델"""
+    status: str = Field(..., description="상태 (success/error)")
+    market: str = Field(..., description="거래 마켓")
+    timestamp: str = Field(..., description="분석 시간")
+
+    # 리스크 등급
+    risk_grade: Optional[str] = Field(None, description="리스크 등급 (A-F)")
+
+    # 분석 결과
+    analysis: Optional[Dict[str, Any]] = Field(None, description="리스크 분석 결과")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
