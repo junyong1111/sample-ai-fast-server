@@ -144,6 +144,10 @@ async def analyze_risk(
             include_analysis=request.include_analysis
         )
 
+        # 디버깅: result 구조 확인
+        print(f"DEBUG: result keys = {result.keys() if isinstance(result, dict) else 'Not a dict'}")
+        print(f"DEBUG: result = {result}")
+
         return RiskAnalysisResponse(**result)
 
     except Exception as e:
