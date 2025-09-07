@@ -298,3 +298,43 @@ class RiskAnalysisResponse(BaseModel):
 
     # 메타데이터
     metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+# === 거래 실행 모델 ===
+class TradeExecutionRequest(BaseModel):
+    """거래 실행 요청 모델"""
+    action: Literal["BUY", "SELL"] = Field(..., description="거래 액션 (BUY/SELL)")
+    market: str = Field(..., description="거래 마켓 (예: BTC/USDT)")
+    amount_quote: float = Field(..., description="거래할 USDT 금액 (매수/매도 금액)")
+    reason: str = Field(..., description="거래 실행 이유")
+    evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
+    user_id: Optional[str] = Field(None, description="사용자 ID (현재는 강제 설정용)")
+
+    @validator('amount_quote')
+    def validate_amount_quote(cls, v):
+        if v <= 0:
+            raise ValueError('거래 금액은 0보다 커야 합니다')
+        return v
+
+
+class TradeExecutionResponse(BaseModel):
+    """거래 실행 응답 모델"""
+    status: str = Field(..., description="상태 (success/error)")
+    timestamp: str = Field(..., description="거래 실행 시간")
+
+    # 거래 정보
+    action: str = Field(..., description="실행된 거래 액션")
+    market: str = Field(..., description="거래 마켓")
+    amount_quote: float = Field(..., description="거래 금액")
+
+    # 거래 결과
+    order_id: Optional[str] = Field(None, description="바이낸스 주문 ID")
+    executed_amount: Optional[float] = Field(None, description="실제 체결된 수량")
+    executed_price: Optional[float] = Field(None, description="체결 가격")
+    commission: Optional[float] = Field(None, description="수수료")
+
+    # 거래 상태
+    order_status: Optional[str] = Field(None, description="주문 상태")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")

@@ -10,10 +10,12 @@ from datetime import datetime, timezone
 from .quantitative_service import QuantitativeServiceV2
 from .risk_service import RiskAnalysisService
 from .balance_service import BalanceService
+from .trading_service import TradingService
 from .models import (
     HealthCheckResponse, QuantitativeRequest, QuantitativeResponse,
     RiskAnalysisRequest, RiskAnalysisResponse,
-    BalanceRequest, BalanceResponse
+    BalanceRequest, BalanceResponse,
+    TradeExecutionRequest, TradeExecutionResponse
 )
 
 # 라우터 생성
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
 quantitative_service = QuantitativeServiceV2()
 risk_service = None  # 지연 초기화
 balance_service = BalanceService()
+trading_service = TradingService()
 
 def get_risk_service():
     """리스크 분석 서비스 지연 초기화"""
@@ -143,7 +146,6 @@ async def analyze_risk(
             personality=request.personality,
             include_analysis=request.include_analysis
         )
-
         # 디버깅: result 구조 확인
         print(f"DEBUG: result keys = {result.keys() if isinstance(result, dict) else 'Not a dict'}")
         print(f"DEBUG: result = {result}")
@@ -328,6 +330,80 @@ async def balance_health_check():
         return {
             "status": "error",
             "service": "balance_service",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": str(e)
+        }
+
+
+# ===== 거래 실행 =====
+
+@router.post(
+    "/trade/execute",
+    response_model=TradeExecutionResponse,
+    summary="거래 실행",
+    description="AI 분석 결과에 따라 바이낸스에서 실제 매수/매도 주문을 실행합니다."
+)
+async def execute_trade(
+    request: TradeExecutionRequest = Body(
+        ...,
+        example={
+            "action": "BUY",
+            "market": "BTC/USDT",
+            "amount_quote": 16.59,
+            "reason": "Target is 9.00% (16.59367115 USDT) of total 184.37412389760001 USDT portfolio. Current BTC holding is 0.0 USDT. Rebalance requires buying 16.59367115 USDT worth of BTC.",
+            "evidence": {
+                "target_btc_percentage": 9,
+                "total_portfolio_value": 184.37412389760001,
+                "current_btc_value": 0,
+                "target_btc_value": 16.593671150784,
+                "rebalance_amount_usdt": 16.593671150784
+            },
+            "user_id": "default_user"
+        }
+    )
+):
+    """
+    거래 실행
+
+    AI 분석 결과에 따라 바이낸스에서 실제 매수/매도 주문을 실행합니다.
+    - action: BUY (매수) 또는 SELL (매도)
+    - market: 거래할 마켓 (예: BTC/USDT)
+    - amount_quote: 거래할 USDT 금액
+    - reason: 거래 실행 이유
+    - evidence: 거래 근거 데이터
+    """
+    try:
+        result = await trading_service.execute_trade(request)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"거래 실행 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/trade/health",
+    summary="거래 서비스 헬스체크",
+    description="거래 실행 서비스의 상태를 확인합니다."
+)
+async def trading_health_check():
+    """거래 서비스 헬스체크"""
+    try:
+        health_status = await trading_service.health_check()
+
+        return {
+            "status": "success",
+            "service": "trading_service",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": health_status
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "service": "trading_service",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "error": str(e)
         }
