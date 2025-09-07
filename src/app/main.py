@@ -4,7 +4,7 @@
 
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
-from .url import blog_router, autotrading_router, trading_router, user_router, autotrading_v2_router
+from .url import blog_router, user_router, autotrading_v2_router
 
 import logging
 import os
@@ -16,7 +16,6 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from src.common.utils.logger import set_logger
 from src.common.error import JSendError, ErrorCode
-from src.app.autotrading.database import mongodb_service
 from src.config.setting import settings
 from src.package.db import init_pool, release_pool
 
@@ -38,9 +37,7 @@ async def startup():
         mongodb_database = settings.MONGODB_DATABASE
 
         # MongoDB 서비스 설정 및 연결
-        mongodb_service.connection_string = mongodb_url
-        mongodb_service.database_name = mongodb_database
-        await mongodb_service.connect()
+
 
         logger.info(f"[MongoDB 연결 성공] {mongodb_url}/{mongodb_database}")
 
@@ -75,8 +72,8 @@ async def shutdown():
 
     # MongoDB 연결 해제
     try:
-        await mongodb_service.disconnect()
-        logger.info(f"[MongoDB 연결 해제 완료] {mongodb_service.connection_string}/{mongodb_service.database_name}")
+        # logger.info(f"[MongoDB 연결 해제 완료] {mongodb_url}/{mongodb_database}")
+        pass
     except Exception as e:
         logger.error(f"""
                         [MongoDB 연결 해제 실패]
@@ -150,8 +147,6 @@ app = FastAPI(
 prefix_url = '/api/v1'
 app.include_router(user_router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
-app.include_router(autotrading_router.router, prefix=prefix_url)
-app.include_router(trading_router.router, prefix=prefix_url)
 app.include_router(blog_router.router, prefix=prefix_url)
 
 
