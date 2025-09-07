@@ -50,7 +50,6 @@ async def analyze_quantitative_indicators(
             "timeframe": "minutes:60",
             "count": 200,
             "exchange": "binance",
-            "testnet": True
         }
     )
 ):
@@ -65,7 +64,6 @@ async def analyze_quantitative_indicators(
             timeframe=request.timeframe,
             count=request.count,
             exchange=request.exchange,
-            testnet=request.testnet
         )
 
         return QuantitativeResponse(**result)

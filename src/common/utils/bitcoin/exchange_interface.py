@@ -72,7 +72,6 @@ class ExchangeFactory:
         exchange_type: str,
         api_key: str | None = None,
         secret: str | None = None,
-        testnet: bool = False
     ):
         """
         거래소 타입에 따라 적절한 인스턴스 생성
@@ -81,7 +80,6 @@ class ExchangeFactory:
             exchange_type: 'upbit' 또는 'binance'
             api_key: API 키
             secret: 시크릿 키
-            testnet: 테스트넷 사용 여부 (바이낸스만 해당)
         """
 
         if exchange_type.lower() == "upbit":
@@ -93,7 +91,7 @@ class ExchangeFactory:
                 api_key = '6Xth53LQplDzgQTc506YdpmsuJA9yoVdXFlLvomAz6j8LBR2ZCW9nhBvJSf8BFr9'
                 secret = 'xRsqSJTNj3SE4FvRUaaD6uMam2TwDuBKClloyxdwsvhF4NzOwnfC5Dmb7iO0syGu'
 
-            return BinanceUtils(api_key=api_key, secret=secret, testnet=testnet)
+            return BinanceUtils(api_key=api_key, secret=secret, testnet=False)
         else:
             raise ValueError(f"Unsupported exchange type: {exchange_type}. Use 'upbit' or 'binance'")
 
@@ -118,7 +116,7 @@ class ExchangeFactory:
                 "country": "Global",
                 "markets": ["BTC/USDT", "ETH/USDT", "BNB/USDT"],
                 "timeframes": ["minutes:1", "minutes:3", "minutes:5", "minutes:15", "minutes:30", "minutes:60", "minutes:240", "days"],
-                "features": ["public_data", "trading", "futures", "testnet"]
+                "features": ["public_data", "trading", "futures"]
             }
         }
 

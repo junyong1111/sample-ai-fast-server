@@ -26,14 +26,14 @@ INTERVAL_MAP = {
 
 
 class BinanceUtils:
-    def __init__(self, api_key: str | None = None, secret: str | None = None, testnet: bool = True):
+    def __init__(self, api_key: str | None = None, secret: str | None = None, testnet: bool = False):
         """
         바이낸스 API 유틸리티 클래스
 
         Args:
             api_key: 바이낸스 API 키 (선택사항)
             secret: 바이낸스 시크릿 키 (선택사항)
-            testnet: 테스트넷 사용 여부 (기본값: True - 안전을 위해)
+            testnet: 테스트넷 사용 여부 (기본값: False - 메인넷 사용)
         """
         import os
 

@@ -15,7 +15,6 @@ class QuantitativeRequest(BaseModel):
     timeframe: Literal["minutes:1", "minutes:5", "minutes:15", "minutes:30", "minutes:60", "minutes:240", "days"] = Field("minutes:60", description="시간프레임")
     count: int = Field(200, description="캔들 개수 (기본값: 200)")
     exchange: Literal["binance", "upbit"] = Field("binance", description="거래소")
-    testnet: bool = Field(True, description="테스트넷 사용 여부")
 
     @validator('count')
     def validate_count(cls, v):
