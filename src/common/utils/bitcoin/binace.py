@@ -370,6 +370,61 @@ class BinanceUtils:
         except Exception as e:
             raise ValueError(f"Failed to fetch trades for {market}: {str(e)}")
 
+    async def get_my_trades(self, market: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """내 거래 내역 조회 (실제 매수/매도 내역)"""
+        try:
+            if not self.api_key or not self.secret:
+                raise ValueError("API key and secret are required for account operations")
+
+            my_trades = await run_in_threadpool(self.exchange.fetch_my_trades, market, limit=limit)
+            return [
+                {
+                    "id": trade['id'],
+                    "timestamp": trade['timestamp'],
+                    "price": float(trade['price']),
+                    "amount": float(trade['amount']),
+                    "side": trade['side'],
+                    "cost": float(trade['cost']),
+                    "fee": float(trade.get('fee', {}).get('cost', 0)) if trade.get('fee') else 0,
+                    "order_id": trade.get('order')
+                }
+                for trade in my_trades
+            ]
+        except Exception as e:
+            raise ValueError(f"Failed to fetch my trades for {market}: {str(e)}")
+
+    async def calculate_avg_entry_price(self, market: str, limit: int = 100) -> Optional[float]:
+        """평균 매수가격 계산"""
+        try:
+            my_trades = await self.get_my_trades(market, limit)
+
+            # 매수 거래만 필터링
+            buy_trades = [trade for trade in my_trades if trade['side'] == 'buy']
+
+            if not buy_trades:
+                return None
+
+            # 가중 평균 매수가격 계산
+            total_amount = 0.0
+            total_cost = 0.0
+
+            for trade in buy_trades:
+                amount = trade['amount']
+                price = trade['price']
+                cost = trade['cost']
+
+                total_amount += amount
+                total_cost += cost
+
+            if total_amount > 0:
+                avg_price = total_cost / total_amount
+                return avg_price
+
+            return None
+
+        except Exception as e:
+            raise ValueError(f"Failed to calculate avg entry price for {market}: {str(e)}")
+
     # ---------- 거래 기능 (매매) ----------
     async def get_account_info(self) -> Dict[str, Any]:
         """계정 정보 조회"""

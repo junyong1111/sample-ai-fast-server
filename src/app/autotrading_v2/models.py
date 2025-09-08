@@ -231,6 +231,7 @@ class AssetBalance(BaseModel):
     locked: float = Field(..., description="잠긴 잔고")
     total: float = Field(..., description="총 잔고")
     usdt_value: Optional[float] = Field(None, description="USDT 기준 가치")
+    avg_entry_price: Optional[float] = Field(None, description="평균 매수가격")
 
 
 class BalanceRequest(BaseModel):

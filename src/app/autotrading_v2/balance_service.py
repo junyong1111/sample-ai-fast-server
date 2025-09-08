@@ -132,12 +132,22 @@ class BalanceService:
                     usdt_value = total
                     total_usdt_value += usdt_value
 
+                # 평균 매수가격 조회 (BTC인 경우만)
+                avg_entry_price = None
+                if asset == "BTC" and total > 0:
+                    try:
+                        avg_entry_price = await self._get_avg_entry_price("BTC/USDT")
+                        logger.info(f"BTC 평균 매수가격: {avg_entry_price}")
+                    except Exception as e:
+                        logger.warning(f"BTC 평균 매수가격 조회 실패: {str(e)}")
+
                 balances.append(AssetBalance(
                     asset=asset,
                     free=free,
                     locked=locked,
                     total=total,
-                    usdt_value=usdt_value
+                    usdt_value=usdt_value,
+                    avg_entry_price=avg_entry_price
                 ))
 
             # USDT 기준 가치로 정렬
@@ -242,3 +252,18 @@ class BalanceService:
                 "service": "balance_service_v2",
                 "error": str(e)
             }
+
+    async def _get_avg_entry_price(self, market: str) -> Optional[float]:
+        """평균 매수가격 조회"""
+        try:
+            if not self.api_key or not self.secret:
+                logger.warning("바이낸스 API 키가 설정되지 않아 평균 매수가격을 조회할 수 없습니다")
+                return None
+
+            binance_utils = BinanceUtils(self.api_key, self.secret)
+            avg_price = await binance_utils.calculate_avg_entry_price(market, limit=100)
+            return avg_price
+
+        except Exception as e:
+            logger.error(f"평균 매수가격 조회 실패: {str(e)}")
+            return None
