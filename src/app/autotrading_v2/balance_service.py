@@ -10,6 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from src.common.utils.logger import set_logger
 from src.common.utils.bitcoin.binace import BinanceUtils
 from src.app.autotrading_v2.models import BalanceRequest, BalanceResponse, AssetBalance
+from src.app.autotrading_v2.portfolio_utils import analyze_asset_with_fees
 
 logger = set_logger("balance_service_v2")
 
@@ -141,13 +142,33 @@ class BalanceService:
                     except Exception as e:
                         logger.warning(f"BTC 평균 매수가격 조회 실패: {str(e)}")
 
+                # 수수료 분석 (요청된 경우만)
+                trading_fees = None
+                profit_loss = None
+                sell_analysis = None
+
+                if request.include_fees_analysis and total > 0 and usdt_value and usdt_value > 0:
+                    try:
+                        current_price = usdt_value / total
+                        fees_analysis = analyze_asset_with_fees(
+                            asset, total, current_price, avg_entry_price, request.fee_rate
+                        )
+                        trading_fees = fees_analysis["trading_fees"]
+                        profit_loss = fees_analysis["profit_loss"]
+                        sell_analysis = fees_analysis["sell_analysis"]
+                    except Exception as e:
+                        logger.warning(f"{asset} 수수료 분석 실패: {str(e)}")
+
                 balances.append(AssetBalance(
                     asset=asset,
                     free=free,
                     locked=locked,
                     total=total,
                     usdt_value=usdt_value,
-                    avg_entry_price=avg_entry_price
+                    avg_entry_price=avg_entry_price,
+                    trading_fees=trading_fees,
+                    profit_loss=profit_loss,
+                    sell_analysis=sell_analysis
                 ))
 
             # USDT 기준 가치로 정렬
@@ -185,35 +206,26 @@ class BalanceService:
         try:
             if not balances or total_usdt_value == 0:
                 return {
-                    "message": "조회된 잔고가 없습니다",
                     "total_assets": 0,
-                    "total_value": "$0.00"
+                    "total_value": 0.0
                 }
 
-            # 주요 자산 정보
+            # 주요 자산 정보 (숫자 데이터만)
             major_assets = []
             for balance in balances[:5]:  # 상위 5개 자산
                 if balance.usdt_value and balance.usdt_value > 0:
                     percentage = (balance.usdt_value / total_usdt_value) * 100
                     major_assets.append({
                         "asset": balance.asset,
-                        "value": f"${balance.usdt_value:,.2f}",
-                        "percentage": f"{percentage:.1f}%"
+                        "value": balance.usdt_value,
+                        "percentage": round(percentage, 2)
                     })
 
-            # 요청된 티커 정보
-            ticker_info = ""
-            if requested_tickers:
-                ticker_info = f"요청된 티커: {', '.join(requested_tickers)}"
-            else:
-                ticker_info = "전체 자산 조회"
-
             return {
-                "message": f"총 {len(balances)}개 자산, 총 가치: ${total_usdt_value:,.2f}",
                 "total_assets": len(balances),
-                "total_value": f"${total_usdt_value:,.2f}",
+                "total_value": total_usdt_value,
                 "major_assets": major_assets,
-                "ticker_info": ticker_info
+                "requested_tickers": requested_tickers
             }
 
         except Exception as e:

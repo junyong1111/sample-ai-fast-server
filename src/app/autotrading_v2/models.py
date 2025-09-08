@@ -233,12 +233,19 @@ class AssetBalance(BaseModel):
     usdt_value: Optional[float] = Field(None, description="USDT 기준 가치")
     avg_entry_price: Optional[float] = Field(None, description="평균 매수가격")
 
+    # 수수료 관련 정보
+    trading_fees: Optional[Dict[str, Any]] = Field(None, description="거래 수수료 정보")
+    profit_loss: Optional[Dict[str, Any]] = Field(None, description="손익 분석")
+    sell_analysis: Optional[Dict[str, Any]] = Field(None, description="매도 분석")
+
 
 class BalanceRequest(BaseModel):
     """잔고 조회 요청 모델"""
     tickers: Optional[List[str]] = Field(None, description="조회할 코인 티커 목록 (예: ['BTC', 'ETH']). None이면 모든 잔고 조회")
     include_zero_balances: bool = Field(False, description="0 잔고 포함 여부 (기본값: False)")
     user_id: Optional[str] = Field(None, description="사용자 ID (현재는 강제 설정용)")
+    include_fees_analysis: bool = Field(True, description="수수료 분석 포함 여부 (기본값: True)")
+    fee_rate: float = Field(0.001, description="거래 수수료율 (기본값: 0.1%)")
 
     @validator('tickers')
     def validate_tickers(cls, v):
