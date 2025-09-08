@@ -299,7 +299,6 @@ class TradingService:
                 "connection_status": connection_status,
                 "service": "trading_service_v2"
             }
-
         except Exception as e:
             return {
                 "status": "unhealthy",
