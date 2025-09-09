@@ -66,6 +66,27 @@ class ErrorCode:
             "유저 추출 실패",
         )
 
+    class Jwt:
+        EXPIRED_ACCESS_TOKEN = (
+            "J001",
+            "액세스 토큰이 만료되었습니다.",
+            "액세스 토큰이 만료되었습니다.",
+        )
+        INVALID_ACCESS_TOKEN = (
+            "J002",
+            "유효하지 않은 액세스 토큰입니다.",
+            "유효하지 않은 액세스 토큰입니다.",
+        )
+        EXPIRED_REFRESH_TOKEN = (
+            "J003",
+            "리프레시 토큰이 만료되었습니다.",
+            "리프레시 토큰이 만료되었습니다.",
+        )
+        INVALID_REFRESH_TOKEN = (
+            "J004",
+            "유효하지 않은 리프레시 토큰입니다.",
+            "유효하지 않은 리프레시 토큰입니다.",
+        )
 
 
 class JSendError(Exception):

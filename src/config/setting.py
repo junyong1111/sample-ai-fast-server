@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     POSTGRESQL_DB_USER: Final[str] = getenv('POSTGRESQL_DB_USER', "devjun")
     POSTGRESQL_DB_PASSWORD: Final[str] = getenv('POSTGRESQL_DB_PASSWORD', "X7pQa9Lm!")
 
+    #JWT 설정
+    JWT_SECRET_KEY: Final[str] = getenv('JWT_SECRET_KEY', "mpTLtWzsJ9G5KRCzIr1BRsJ3kWifMaHE3GIlPS6ttmk")
+    JWT_ALGORITHM: Final[str] = getenv('JWT_ALGORITHM', "HS256")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: Final[int] = getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', 30)
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: Final[int] = getenv('JWT_REFRESH_TOKEN_EXPIRE_DAYS', 7)
+
     # 데이터베이스 설정 (기존 코드 호환성을 위해)
     @property
     def DATABASES(self):

@@ -111,7 +111,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-prefix_url = '/api/v1'
+prefix_url = '/api/v2'
 app.include_router(user_router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
 app.include_router(blog_router.router, prefix=prefix_url)

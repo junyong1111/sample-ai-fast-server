@@ -19,7 +19,7 @@ from .models import (
 )
 
 # 라우터 생성
-router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
+router = APIRouter()
 
 # 서비스 인스턴스
 quantitative_service = QuantitativeServiceV2()
@@ -39,6 +39,7 @@ def get_risk_service():
 
 @router.post(
     "/quantitative/analyze",
+    tags=["Autotrading-Quantitative"],
     response_model=QuantitativeResponse,
     summary="정량지표 분석 (N8n 호환)",
     description="차트 기반 기술적 지표를 분석하여 거래 신호를 생성합니다. N8n 에이전트에서 정기적으로 호출할 수 있습니다."
@@ -76,10 +77,9 @@ async def analyze_quantitative_indicators(
         )
 
 
-
-
 @router.get(
     "/quantitative/indicators",
+    tags=["Autotrading-Quantitative"],
     summary="지원하는 기술적 지표 목록",
     description="현재 지원하는 기술적 지표들의 목록을 조회합니다."
 )
@@ -94,6 +94,7 @@ async def get_supported_indicators():
 
 @router.get(
     "/quantitative/regime-weights",
+    tags=["Autotrading-Quantitative"],
     summary="레짐별 가중치 조회",
     description="추세장과 횡보장의 지표별 가중치를 조회합니다."
 )
@@ -115,6 +116,7 @@ async def get_regime_weights():
 
 @router.post(
     "/risk/analyze",
+    tags=["Autotrading-Risk"],
     response_model=RiskAnalysisResponse,
     summary="리스크 분석 (N8n 호환)",
     description="yfinance, LangChain, LangGraph를 활용하여 시장 리스크를 분석하고 요약합니다."
@@ -159,40 +161,12 @@ async def analyze_risk(
         )
 
 
-@router.get(
-    "/risk/health",
-    summary="리스크 분석 서비스 헬스체크",
-    description="리스크 분석 서비스의 상태를 확인합니다."
-)
-async def risk_health_check():
-    """리스크 분석 서비스 헬스체크"""
-    try:
-        # 지연 초기화된 서비스 사용
-        service = get_risk_service()
-        health_status = await service.health_check()
-
-        return {
-            "status": "success",
-            "service": "risk_analysis",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": health_status
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "service": "risk_analysis",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": str(e)
-        }
-
-
-
 
 # ===== 헬스체크 및 유틸리티 =====
 
 @router.get(
     "/health",
+    tags=["Autotrading"],
     response_model=HealthCheckResponse,
     summary="서비스 헬스체크",
     description="Autotrading V2 서비스의 상태를 확인합니다."
@@ -239,6 +213,7 @@ async def health_check():
 
 @router.post(
     "/balance",
+    tags=["Autotrading-Balance"],
     response_model=BalanceResponse,
     summary="현재 잔고 조회",
     description="바이낸스 API를 통해 현재 계좌의 실시간 잔고를 조회합니다. 특정 티커를 지정하면 해당 코인만 조회합니다."
@@ -271,74 +246,11 @@ async def get_balance(
             detail=f"잔고 조회 실패: {str(e)}"
         )
 
-
-@router.get(
-    "/balance",
-    response_model=BalanceResponse,
-    summary="현재 잔고 조회 (GET)",
-    description="GET 방식으로 현재 잔고를 조회합니다."
-)
-async def get_balance_get(
-    tickers: Optional[str] = Query(None, description="조회할 코인 티커 목록 (쉼표로 구분, 예: BTC,ETH,USDT)"),
-    include_zero_balances: bool = Query(False, description="0 잔고 포함 여부")
-):
-    """
-    현재 잔고 조회 (GET 방식)
-
-    쿼리 파라미터를 통해 잔고를 조회합니다.
-    """
-    try:
-        # 티커 파싱
-        ticker_list = None
-        if tickers:
-            ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
-
-        request = BalanceRequest(
-            tickers=ticker_list,
-            include_zero_balances=include_zero_balances,
-            user_id=None
-        )
-
-        result = await balance_service.get_balance(request)
-        return result
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"잔고 조회 실패: {str(e)}"
-        )
-
-
-@router.get(
-    "/balance/health",
-    summary="잔고 서비스 헬스체크",
-    description="잔고 조회 서비스의 상태를 확인합니다."
-)
-async def balance_health_check():
-    """잔고 서비스 헬스체크"""
-    try:
-        health_status = await balance_service.health_check()
-
-        return {
-            "status": "success",
-            "service": "balance_service",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": health_status
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "service": "balance_service",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": str(e)
-        }
-
-
 # ===== 거래 실행 =====
 
 @router.post(
     "/trade/execute",
+    tags=["Autotrading-Trade"],
     response_model=TradeExecutionResponse,
     summary="거래 실행",
     description="AI 분석 결과에 따라 바이낸스에서 실제 매수/매도 주문을 실행합니다."
@@ -381,31 +293,4 @@ async def execute_trade(
             status_code=500,
             detail=f"거래 실행 실패: {str(e)}"
         )
-
-
-@router.get(
-    "/trade/health",
-    summary="거래 서비스 헬스체크",
-    description="거래 실행 서비스의 상태를 확인합니다."
-)
-async def trading_health_check():
-    """거래 서비스 헬스체크"""
-    try:
-        health_status = await trading_service.health_check()
-
-        return {
-            "status": "success",
-            "service": "trading_service",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": health_status
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "service": "trading_service",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": str(e)
-        }
-
 
