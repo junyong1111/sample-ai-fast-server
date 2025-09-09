@@ -1,7 +1,3 @@
-"""
-🚀 FastAPI autotrading
-"""
-
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
 from .url import blog_router, user_router, autotrading_v2_router
@@ -30,25 +26,6 @@ async def startup():
     app.state.browser = browser
     app.state.context = context
 
-    # MongoDB 연결
-    try:
-        # 환경변수에서 MongoDB 설정 가져오기
-        mongodb_url = settings.MONGODB_URL
-        mongodb_database = settings.MONGODB_DATABASE
-
-        # MongoDB 서비스 설정 및 연결
-
-
-        logger.info(f"[MongoDB 연결 성공] {mongodb_url}/{mongodb_database}")
-
-    except Exception as e:
-        logger.error(f"""
-                        [MongoDB 연결 실패]
-                        error : {e.__class__.__name__}
-                        message : {e}
-                        MongoDB 없이 서비스가 시작됩니다. 거래 신호 저장 기능이 제한됩니다."
-                    """)
-
     try:
         # PostgreSQL 서비스 설정 및 연결
         await init_pool()
@@ -70,16 +47,6 @@ async def shutdown():
     except Exception:
         pass
 
-    # MongoDB 연결 해제
-    try:
-        # logger.info(f"[MongoDB 연결 해제 완료] {mongodb_url}/{mongodb_database}")
-        pass
-    except Exception as e:
-        logger.error(f"""
-                        [MongoDB 연결 해제 실패]
-                        error : {e.__class__.__name__}
-                        message : {e}
-                    """)
     try:
         await release_pool()
     except Exception as e:
