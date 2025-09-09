@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
-from .url import blog_router, user_router, autotrading_v2_router
+from .url import blog_router, user_router, autotrading_v2_router, information_router
 
 import logging
 import os
@@ -112,9 +112,10 @@ app = FastAPI(
 )
 
 prefix_url = '/api/v2'
-app.include_router(user_router, prefix=prefix_url)
+app.include_router(user_router.router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
 app.include_router(blog_router.router, prefix=prefix_url)
+app.include_router(information_router.router, prefix=prefix_url)
 
 
 
