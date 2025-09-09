@@ -19,18 +19,20 @@ services:
     networks: [appnet]
 
   fastapi:
-    image: devjunyong1111/n8n-auto-trading:latest
+    build:
+      context: .
+      dockerfile: src/Dockerfile
     container_name: fastapi
     restart: unless-stopped
     command: uvicorn src.app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     environment:
-      POSTGRESQL_DB_HOST: "postgresql"         # 같은 compose 네트워크의 서비스명
-      POSTGRESQL_DB_PORT: "5432"
-      POSTGRESQL_DB_DATABASE: "autotrading"
-      POSTGRESQL_DB_USER: "devjun"
-      POSTGRESQL_DB_PASSWORD: "X7pQa9Lm!"
+      POSTGRESQL_DB_HOST: "host.docker.internal"  # 로컬호스트의 SSH 터널 사용
+      POSTGRESQL_DB_PORT: "15432"
+      POSTGRESQL_DB_DATABASE: ${POSTGRESQL_DB_DATABASE}
+      POSTGRESQL_DB_USER: ${POSTGRESQL_DB_USER}
+      POSTGRESQL_DB_PASSWORD: ${POSTGRESQL_DB_PASSWORD}
       BINANCE_API_KEY: ${BINANCE_API_KEY}
       BINANCE_SECRET_KEY: ${BINANCE_SECRET_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
