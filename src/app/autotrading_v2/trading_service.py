@@ -240,7 +240,33 @@ class TradingService:
 
             # 매도할 수량 계산 (USDT 기준으로 BTC 수량 계산)
             # request.amount_quote는 USDT 금액, 이를 BTC 수량으로 변환
-            current_price = await binance_utils.get_current_price(request.market)
+            # 직접 ccxt를 사용해서 현재 가격 조회
+            import ccxt
+            exchange = ccxt.binance({
+                'apiKey': self.api_key or '',
+                'secret': self.secret or '',
+                'sandbox': False,
+                'enableRateLimit': True,
+            })
+
+            ticker = await run_in_threadpool(exchange.fetch_ticker, request.market)
+            current_price = float(ticker.get("last", 0))
+
+            if current_price <= 0:
+                return TradeExecutionResponse(
+                    status="error",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    action=request.action,
+                    market=request.market,
+                    amount_quote=request.amount_quote,
+                    order_id=None,
+                    executed_amount=None,
+                    executed_price=None,
+                    commission=None,
+                    order_status=None,
+                    metadata={"error": f"가격 조회 실패: {request.market}"}
+                )
+
             btc_quantity = request.amount_quote / current_price
 
             # 잔고 부족 체크
