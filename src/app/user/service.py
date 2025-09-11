@@ -1,4 +1,5 @@
 from src.common.error import JSendError
+from src.common.utils.response import JSendResponse
 from src.common.error import ErrorCode
 from src.common.utils.auth import get_md5_hash
 from src.app.user.model import User
@@ -40,7 +41,6 @@ class UserService:
                 )
             self.logger.info(f"유저 조회 결과: {user}")
             return user
-
 
     async def create_user(self, user: User):
         self.logger.info(
@@ -88,23 +88,23 @@ class UserService:
         self.logger.info("유저 로그인 성공")
         return user_obj
 
-    async def get_user_account_state(self, user_idx: int):
-        user_obj = await self.get_user_by_user_idx(user_idx)
+    async def get_user_trading_info(self, user_idx: int) -> JSendResponse:
+        async with connection() as session:
+            user_obj = await self.user_repository.get_user_trading_by_user_idx(
+                session=session,
+                user_idx=user_idx,
+            )
         if not user_obj:
-            self.logger.error("유저 계좌 상태 조회 실패")
+            self.logger.error("유저 트레이딩 정보 조회 실패")
             raise JSendError(
                 code=ErrorCode.User.USER_NOT_FOUND[0],
                 message=ErrorCode.User.USER_NOT_FOUND[1],
             )
-
-        user_unique_id = user_obj['id']
-
-
-        async with connection() as session:
-            user = await self.user_repository.get_user_account_state(
-                session=session,
-                user_idx=user_unique_id,
-            )
-        self.logger.info(f"유저 계좌 상태 조회 결과: {user}")
-        return user
-
+        self.logger.info("유저 트레이딩 정보 조회 성공")
+        result = dict(user_obj) if user_obj else None
+        # Record 객체를 딕셔너리로 변환하고 Decimal을 float로 변환
+        return JSendResponse(
+            status="success",
+            message="유저 트레이딩 정보 조회 성공",
+            data=result,
+        )

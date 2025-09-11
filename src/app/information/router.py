@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Request
+from src.common.utils.response import JSendResponse
 from src.app.information import service as information_service
+from src.app.user import service as user_service
 from src.common.utils.logger import set_logger
 
 router = APIRouter()
@@ -15,6 +17,11 @@ def get_information_service():
     return information_service.InformationService(logger)
 
 
+def get_user_service():
+    return user_service.UserService(logger)
+
+
+
 @router.get(
     "/information/weights/strategy/{personality}",
     tags=["Information"],
@@ -24,10 +31,34 @@ def get_information_service():
 async def get_strategy_weights(
         personality: str,
         information_service: information_service.InformationService = Depends(get_information_service)
-    ):
+    ) -> JSendResponse:
     return await information_service.get_strategy_weights(personality)
 
+#차트 분석 에이전트 필요 데이터 GET
+@router.get(
+    "/information/weights/chart",
+    tags=["Information"],
+    summary="차트 분석 에이전트 필요 가중치 데이터를 조회합니다.",
+    description="차트 분석 에이전트 필요 가중치 데이터를 조회합니다.",
+)
+async def get_chart_weights(
+    information_service: information_service.InformationService = Depends(get_information_service)
+):
+    return await information_service.get_chart_weights()
 
+
+#유저 정보 가져오기
+@router.get(
+    "/information/users/{user_idx}",
+    tags=["Information"],
+    summary="특정 유저의 정보를 조회합니다.",
+    description="특정 유저의 정보를 조회합니다.",
+)
+async def get_regime_weights(
+    user_idx: int,
+    user_service: user_service.UserService = Depends(get_user_service)
+) -> JSendResponse:
+    return await user_service.get_user_trading_info(user_idx)
 
 
 

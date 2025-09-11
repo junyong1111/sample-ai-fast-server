@@ -2,7 +2,7 @@ import io
 import re
 from typing import List, Union
 
-from fastapi.responses import JSONResponse
+from src.common.utils.response import JSendResponse
 from src.app.information.repository import InformationRepository
 from src.package.db import connection, transaction
 
@@ -15,7 +15,7 @@ class InformationService:
     async def get_strategy_weights(
             self,
             personality: str
-        ) -> JSONResponse:
+        ) -> JSendResponse:
         self.logger.info(f"특정 투자 성향에 해당하는 전략적 가중치를 조회합니다.: {personality}")
         async with connection() as session:
             weights = await self.information_repo.get_strategy_weights(
@@ -32,17 +32,38 @@ class InformationService:
                 "weight_risk": 0.33
             }
         else:
-            # asyncpg.Record를 딕셔너리로 변환하고 Decimal을 float로 변환
-            weights_dict = {}
-            for key, value in weights.items():
-                weights_dict[key] = float(value)
-            weights = weights_dict
+            weights = {
+                "weight_quant": weights.get("weight_quant"),
+                "weight_social": weights.get("weight_social"),
+                "weight_risk": weights.get("weight_risk")
+            }
             message = "전략적 가중치를 성공적으로 조회했습니다."
 
-        return JSONResponse(
-            content={
-                "status": "success",
-                "message": message,
-                "data": weights
-            }
+        return JSendResponse(
+            status="success",
+            message=message,
+            data=weights,
+        )
+    async def get_chart_weights(
+        self
+    ) -> JSendResponse:
+        self.logger.info("차트 분석 에이전트 필요 가중치 데이터를 조회합니다.")
+        async with connection() as session:
+            weights = await self.information_repo.get_chart_weights(
+                session=session
+            )
+
+        chart_weights = {
+            "range": {},
+            "trend": {}
+        }
+        for weight in weights:
+            if weight.get("regime") == "range":
+                chart_weights["range"][weight.get("indicator")] = weight.get("weight")
+            elif weight.get("regime") == "trend":
+                chart_weights["trend"][weight.get("indicator")] = weight.get("weight")
+
+        return JSendResponse(
+            status="success",
+            data=chart_weights
         )

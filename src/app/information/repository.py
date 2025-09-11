@@ -16,3 +16,17 @@ class InformationRepository:
             WHERE personality = $1 AND is_active = TRUE
         """
         return await session.fetchrow(query, personality)
+
+
+    async def get_chart_weights(self, session):
+        query = """
+            SELECT 'range' AS regime, idx, indicator, weight, is_active, last_updated
+            FROM regime_weights_range
+            WHERE is_active
+            UNION ALL
+            SELECT 'trend' AS regime, idx, indicator, weight, is_active, last_updated
+            FROM regime_weights_trend
+            WHERE is_active
+            ORDER BY regime, idx;
+        """
+        return await session.fetch(query)
