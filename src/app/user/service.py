@@ -12,6 +12,15 @@ class UserService:
         self.logger = logger
         self.user_repository = UserRepository(logger)
 
+    async def get_user_by_user_idx(self, user_idx: int):
+        async with connection() as session:
+            user = await self.user_repository.get_user_by_user_idx(
+                session=session,
+                user_idx=user_idx,
+            )
+        self.logger.info(f"유저 조회 결과: {user}")
+        return user
+
     async def get_user_by_user_id(self, user_id: str):
         async with connection() as session:
             user = await self.user_repository.get_user_by_user_id(
@@ -78,3 +87,24 @@ class UserService:
             )
         self.logger.info("유저 로그인 성공")
         return user_obj
+
+    async def get_user_account_state(self, user_idx: int):
+        user_obj = await self.get_user_by_user_idx(user_idx)
+        if not user_obj:
+            self.logger.error("유저 계좌 상태 조회 실패")
+            raise JSendError(
+                code=ErrorCode.User.USER_NOT_FOUND[0],
+                message=ErrorCode.User.USER_NOT_FOUND[1],
+            )
+
+        user_unique_id = user_obj['id']
+
+
+        async with connection() as session:
+            user = await self.user_repository.get_user_account_state(
+                session=session,
+                user_idx=user_unique_id,
+            )
+        self.logger.info(f"유저 계좌 상태 조회 결과: {user}")
+        return user
+

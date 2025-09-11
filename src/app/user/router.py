@@ -42,3 +42,16 @@ async def login(
     user_service: UserService = Depends(get_user_service)
 ):
     return await user_service.login(user.user_id, user.password)
+
+@router.get(
+    "/users/{user_idx}/state}",
+    tags=["Users - Trading"],
+    summary="트레이딩에 필요한 특정 유저의 계좌 상태를 조회합니다.",
+    description="트레이딩에 필요한 특정 유저의 계좌 상태를 조회합니다.",
+)
+async def get_user_account_state(
+        user_idx: int,
+        user_service: UserService = Depends(get_user_service)
+    ):
+    return await user_service.get_user_account_state(user_idx)
+

@@ -224,7 +224,9 @@ async def get_balance(
         example={
             "tickers": ["BTC", "ETH", "USDT"],
             "include_zero_balances": False,
-            "user_id": "default_user"
+            "user_id": "default_user",
+            "include_trade_history": True,
+            "recent_trades_count": 10
         }
     )
 ):

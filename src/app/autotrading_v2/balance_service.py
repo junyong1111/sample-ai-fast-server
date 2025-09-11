@@ -5,11 +5,14 @@
 
 import os
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi.concurrency import run_in_threadpool
 from src.common.utils.logger import set_logger
 from src.common.utils.bitcoin.binace import BinanceUtils
-from src.app.autotrading_v2.models import BalanceRequest, BalanceResponse, AssetBalance
+from src.app.autotrading_v2.models import (
+    BalanceRequest, BalanceResponse, AssetBalance,
+    LastTradeInfo, RecentTradeInfo, AIAnalysisData
+)
 from src.app.autotrading_v2.portfolio_utils import analyze_asset_with_fees
 
 logger = set_logger("balance_service_v2")
@@ -40,6 +43,9 @@ class BalanceService:
                     balances=[],
                     total_usdt_value=0.0,
                     requested_tickers=request.tickers,
+                    last_trade=None,
+                    recent_trades=None,
+                    ai_analysis_data=None,
                     metadata={"error": "API 키가 설정되지 않았습니다. 환경변수(BINANCE_API_KEY, BINANCE_SECRET_KEY) 설정이 필요합니다."}
                 )
 
@@ -60,6 +66,9 @@ class BalanceService:
                         balances=[],
                         total_usdt_value=0.0,
                         requested_tickers=request.tickers,
+                        last_trade=None,
+                        recent_trades=None,
+                        ai_analysis_data=None,
                         metadata={
                             "error": f"바이낸스 API 연결 실패: {health_check.get('error', 'Unknown error')}",
                             "suggestion": "API 키 권한, IP 제한을 확인해주세요."
@@ -72,6 +81,9 @@ class BalanceService:
                     balances=[],
                     total_usdt_value=0.0,
                     requested_tickers=request.tickers,
+                    last_trade=None,
+                    recent_trades=None,
+                    ai_analysis_data=None,
                     metadata={
                         "error": f"바이낸스 API 연결 테스트 실패: {str(health_error)}",
                         "suggestion": "API 키 권한, IP 제한을 확인해주세요."
@@ -123,14 +135,14 @@ class BalanceService:
                         })
                         ticker = await run_in_threadpool(exchange.fetch_ticker, f"{asset}/USDT")
                         price = float(ticker.get("last", 0))
-                        usdt_value = total * price
+                        usdt_value = float(total) * price
                         total_usdt_value += usdt_value
                         logger.info(f"{asset} 가격: {price}, USDT 가치: {usdt_value}")
                     except Exception as price_error:
                         logger.warning(f"{asset} 가격 조회 실패: {price_error}")
-                        usdt_value = 0
+                        usdt_value = 0.0
                 elif asset == "USDT":
-                    usdt_value = total
+                    usdt_value = float(total)
                     total_usdt_value += usdt_value
 
                 # 평균 매수가격 조회 (BTC인 경우만)
@@ -177,12 +189,32 @@ class BalanceService:
             # 요약 정보 생성
             summary = self._create_summary(balances, total_usdt_value, target_assets)
 
+            # 거래 내역 조회 (요청된 경우만)
+            last_trade = None
+            recent_trades = None
+            ai_analysis_data = None
+
+            logger.info(f"거래 내역 조회 요청: include_trade_history={request.include_trade_history}")
+
+            if request.include_trade_history:
+                try:
+                    logger.info("거래 내역 조회 시작...")
+                    last_trade, recent_trades, ai_analysis_data = await self._get_trade_history(
+                        binance_utils, request.recent_trades_count
+                    )
+                    logger.info(f"거래 내역 조회 완료: last_trade={last_trade is not None}, recent_trades={len(recent_trades) if recent_trades else 0}")
+                except Exception as e:
+                    logger.error(f"거래 내역 조회 실패: {str(e)}", exc_info=True)
+
             return BalanceResponse(
                 status="success",
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 balances=balances,
                 total_usdt_value=total_usdt_value,
                 requested_tickers=target_assets,
+                last_trade=last_trade,
+                recent_trades=recent_trades,
+                ai_analysis_data=ai_analysis_data,
                 metadata={
                     "total_assets": len(balances),
                     "api_key_masked": f"{self.api_key[:8]}***{self.api_key[-4:]}",
@@ -198,6 +230,9 @@ class BalanceService:
                 balances=[],
                 total_usdt_value=0.0,
                 requested_tickers=request.tickers,
+                last_trade=None,
+                recent_trades=None,
+                ai_analysis_data=None,
                 metadata={"error": f"잔고 조회 중 오류가 발생했습니다: {str(e)}"}
             )
 
@@ -279,3 +314,186 @@ class BalanceService:
         except Exception as e:
             logger.error(f"평균 매수가격 조회 실패: {str(e)}")
             return None
+
+    async def _get_trade_history(self, binance_utils: BinanceUtils, recent_trades_count: int) -> tuple[Optional[LastTradeInfo], Optional[List[RecentTradeInfo]], Optional[AIAnalysisData]]:
+        """거래 내역 조회 및 AI 분석 데이터 생성"""
+        try:
+            # 바이낸스 API를 통해 모든 거래 내역 조회
+            all_trades = []
+
+            try:
+                # CCXT를 직접 사용하여 거래 내역 조회
+                import ccxt
+                if not self.api_key or not self.secret:
+                    logger.error("API 키가 설정되지 않아 거래 내역을 조회할 수 없습니다")
+                    return None, None, None
+
+                exchange = ccxt.binance({
+                    'apiKey': self.api_key,
+                    'secret': self.secret,
+                    'sandbox': False,
+                    'enableRateLimit': True,
+                })
+                # 최근 30일간의 거래 내역 조회
+                since = int((datetime.now(timezone.utc) - timedelta(days=30)).timestamp() * 1000)
+
+                # 주요 거래 쌍들 조회
+                markets = ["BTC/USDT", "ETH/USDT", "BNB/USDT"]
+
+                for market in markets:
+                    try:
+                        logger.info(f"{market} 거래 내역 조회 시작...")
+                        trades = await run_in_threadpool(
+                            exchange.fetch_my_trades,
+                            market,
+                            since=since,
+                            limit=100
+                        )
+                        logger.info(f"{market} 거래 내역 {len(trades)}개 조회됨")
+
+                        for trade in trades:
+                            trade['market'] = market
+                            all_trades.append(trade)
+
+                    except Exception as e:
+                        logger.error(f"{market} 거래 내역 조회 실패: {str(e)}", exc_info=True)
+                        continue
+
+            except Exception as e:
+                logger.error(f"바이낸스 API 거래 내역 조회 실패: {str(e)}")
+                return None, None, None
+
+            if not all_trades:
+                logger.info("거래 내역이 없습니다.")
+                return None, None, None
+
+            # 시간순으로 정렬 (최신순)
+            all_trades.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+
+            # 마지막 거래 정보
+            last_trade = None
+            if all_trades:
+                last_trade_data = all_trades[0]
+                last_trade = LastTradeInfo(
+                    date=datetime.fromtimestamp(last_trade_data.get('timestamp', 0) / 1000, tz=timezone.utc).isoformat(),
+                    symbol=last_trade_data.get('symbol', ''),
+                    side=last_trade_data.get('side', ''),
+                    amount=float(last_trade_data.get('amount', 0)),
+                    price=float(last_trade_data.get('price', 0)),
+                    cost=float(last_trade_data.get('cost', 0)),
+                    fee=float(last_trade_data.get('fee', {}).get('cost', 0)) if isinstance(last_trade_data.get('fee'), dict) else float(last_trade_data.get('fee', 0)),
+                    fee_asset=last_trade_data.get('fee', {}).get('currency', 'USDT') if isinstance(last_trade_data.get('fee'), dict) else 'USDT'
+                )
+
+            # 최근 거래 내역
+            recent_trades = []
+            for trade_data in all_trades[:recent_trades_count]:
+                recent_trades.append(RecentTradeInfo(
+                    date=datetime.fromtimestamp(trade_data.get('timestamp', 0) / 1000, tz=timezone.utc).isoformat(),
+                    symbol=trade_data.get('symbol', ''),
+                    side=trade_data.get('side', ''),
+                    amount=float(trade_data.get('amount', 0)),
+                    price=float(trade_data.get('price', 0)),
+                    cost=float(trade_data.get('cost', 0)),
+                    fee=float(trade_data.get('fee', {}).get('cost', 0)) if isinstance(trade_data.get('fee'), dict) else float(trade_data.get('fee', 0)),
+                    fee_asset=trade_data.get('fee', {}).get('currency', 'USDT') if isinstance(trade_data.get('fee'), dict) else 'USDT'
+                ))
+
+            # AI 분석 데이터 생성
+            ai_analysis_data = self._create_ai_analysis_data(all_trades)
+
+            return last_trade, recent_trades, ai_analysis_data
+
+        except Exception as e:
+            logger.error(f"거래 내역 조회 실패: {str(e)}")
+            return None, None, None
+
+    def _create_ai_analysis_data(self, trades: List[Dict[str, Any]]) -> AIAnalysisData:
+        """AI 분석용 거래 데이터 생성"""
+        try:
+            if not trades:
+                return AIAnalysisData(
+                    total_trades_count=0,
+                    buy_trades_count=0,
+                    sell_trades_count=0,
+                    avg_trade_amount=0.0,
+                    avg_trade_quantity=0.0,
+                    total_fees_paid=0.0,
+                    recent_activity_score=0.0,
+                    buy_sell_ratio=0.0,
+                    trading_frequency=0.0,
+                    avg_trade_interval_hours=0.0,
+                    fee_efficiency=0.0
+                )
+
+            # 기본 통계
+            total_trades = len(trades)
+            buy_trades = [t for t in trades if t.get('side') == 'buy']
+            sell_trades = [t for t in trades if t.get('side') == 'sell']
+
+            buy_count = len(buy_trades)
+            sell_count = len(sell_trades)
+
+            # 거래 금액 및 수량 통계
+            total_amount = sum(float(t.get('cost', 0)) for t in trades)
+            total_quantity = sum(float(t.get('amount', 0)) for t in trades)
+            avg_trade_amount = total_amount / total_trades if total_trades > 0 else 0.0
+            avg_trade_quantity = total_quantity / total_trades if total_trades > 0 else 0.0
+
+            # 수수료 통계
+            total_fees = sum(
+                float(t.get('fee', {}).get('cost', 0)) if isinstance(t.get('fee'), dict)
+                else float(t.get('fee', 0))
+                for t in trades
+            )
+            fee_efficiency = (total_fees / total_amount) * 100 if total_amount > 0 else 0.0
+
+            # 매수/매도 비율
+            buy_sell_ratio = buy_count / sell_count if sell_count > 0 else float('inf') if buy_count > 0 else 0.0
+
+            # 거래 빈도 계산 (최근 30일 기준)
+            now = datetime.now(timezone.utc)
+            thirty_days_ago = now - timedelta(days=30)
+            recent_trades = [t for t in trades if datetime.fromtimestamp(t.get('timestamp', 0) / 1000, tz=timezone.utc) >= thirty_days_ago]
+            trading_frequency = len(recent_trades) / 30.0  # 거래/일
+
+            # 거래 간격 계산
+            if len(trades) > 1:
+                timestamps = sorted([t.get('timestamp', 0) for t in trades])
+                intervals = [(timestamps[i+1] - timestamps[i]) / (1000 * 3600) for i in range(len(timestamps)-1)]  # 시간 단위
+                avg_trade_interval_hours = sum(intervals) / len(intervals) if intervals else 0.0
+            else:
+                avg_trade_interval_hours = 0.0
+
+            # 최근 활동성 점수 (0-1)
+            recent_activity_score = min(trading_frequency / 2.0, 1.0)  # 하루 2회 거래를 1.0으로 정규화
+
+            return AIAnalysisData(
+                total_trades_count=total_trades,
+                buy_trades_count=buy_count,
+                sell_trades_count=sell_count,
+                avg_trade_amount=round(avg_trade_amount, 2),
+                avg_trade_quantity=round(avg_trade_quantity, 6),
+                total_fees_paid=round(total_fees, 2),
+                recent_activity_score=round(recent_activity_score, 3),
+                buy_sell_ratio=round(buy_sell_ratio, 2),
+                trading_frequency=round(trading_frequency, 2),
+                avg_trade_interval_hours=round(avg_trade_interval_hours, 1),
+                fee_efficiency=round(fee_efficiency, 3)
+            )
+
+        except Exception as e:
+            logger.error(f"AI 분석 데이터 생성 실패: {str(e)}")
+            return AIAnalysisData(
+                total_trades_count=0,
+                buy_trades_count=0,
+                sell_trades_count=0,
+                avg_trade_amount=0.0,
+                avg_trade_quantity=0.0,
+                total_fees_paid=0.0,
+                recent_activity_score=0.0,
+                buy_sell_ratio=0.0,
+                trading_frequency=0.0,
+                avg_trade_interval_hours=0.0,
+                fee_efficiency=0.0
+            )

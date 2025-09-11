@@ -239,6 +239,45 @@ class AssetBalance(BaseModel):
     sell_analysis: Optional[Dict[str, Any]] = Field(None, description="매도 분석")
 
 
+class LastTradeInfo(BaseModel):
+    """마지막 거래 정보 모델"""
+    date: str = Field(..., description="거래 날짜 (ISO 8601)")
+    symbol: str = Field(..., description="거래 심볼 (예: BTC/USDT)")
+    side: str = Field(..., description="거래 방향 (buy/sell)")
+    amount: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    cost: float = Field(..., description="거래 금액")
+    fee: float = Field(..., description="수수료")
+    fee_asset: str = Field(..., description="수수료 자산")
+
+
+class RecentTradeInfo(BaseModel):
+    """최근 거래 정보 모델"""
+    date: str = Field(..., description="거래 날짜 (ISO 8601)")
+    symbol: str = Field(..., description="거래 심볼")
+    side: str = Field(..., description="거래 방향 (buy/sell)")
+    amount: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    cost: float = Field(..., description="거래 금액")
+    fee: float = Field(..., description="수수료")
+    fee_asset: str = Field(..., description="수수료 자산")
+
+
+class AIAnalysisData(BaseModel):
+    """AI 분석용 거래 데이터 모델"""
+    total_trades_count: int = Field(..., description="총 거래 횟수")
+    buy_trades_count: int = Field(..., description="매수 거래 횟수")
+    sell_trades_count: int = Field(..., description="매도 거래 횟수")
+    avg_trade_amount: float = Field(..., description="평균 거래 금액")
+    avg_trade_quantity: float = Field(..., description="평균 거래 수량")
+    total_fees_paid: float = Field(..., description="총 지불 수수료")
+    recent_activity_score: float = Field(..., description="최근 활동성 점수 (0-1)")
+    buy_sell_ratio: float = Field(..., description="매수/매도 비율")
+    trading_frequency: float = Field(..., description="거래 빈도 (거래/일)")
+    avg_trade_interval_hours: float = Field(..., description="평균 거래 간격 (시간)")
+    fee_efficiency: float = Field(..., description="수수료 효율성 (거래금액 대비 수수료 비율)")
+
+
 class BalanceRequest(BaseModel):
     """잔고 조회 요청 모델"""
     tickers: Optional[List[str]] = Field(None, description="조회할 코인 티커 목록 (예: ['BTC', 'ETH']). None이면 모든 잔고 조회")
@@ -246,6 +285,8 @@ class BalanceRequest(BaseModel):
     user_id: Optional[str] = Field(None, description="사용자 ID (현재는 강제 설정용)")
     include_fees_analysis: bool = Field(True, description="수수료 분석 포함 여부 (기본값: True)")
     fee_rate: float = Field(0.001, description="거래 수수료율 (기본값: 0.1%)")
+    include_trade_history: bool = Field(True, description="거래 내역 포함 여부 (기본값: True)")
+    recent_trades_count: int = Field(10, description="최근 거래 개수 (기본값: 10)")
 
     @validator('tickers')
     def validate_tickers(cls, v):
@@ -255,6 +296,14 @@ class BalanceRequest(BaseModel):
                 v.append('USDT')
             # 중복 제거
             v = list(set(v))
+        return v
+
+    @validator('recent_trades_count')
+    def validate_recent_trades_count(cls, v):
+        if v < 1:
+            raise ValueError('recent_trades_count는 최소 1 이상이어야 합니다')
+        if v > 50:
+            raise ValueError('recent_trades_count는 최대 50 이하여야 합니다')
         return v
 
 
@@ -269,6 +318,11 @@ class BalanceResponse(BaseModel):
 
     # 요청된 티커 정보
     requested_tickers: Optional[List[str]] = Field(None, description="요청된 티커 목록")
+
+    # 거래 내역 정보 (선택사항)
+    last_trade: Optional[LastTradeInfo] = Field(None, description="마지막 거래 정보")
+    recent_trades: Optional[List[RecentTradeInfo]] = Field(None, description="최근 거래 내역")
+    ai_analysis_data: Optional[AIAnalysisData] = Field(None, description="AI 분석용 거래 데이터")
 
     # 메타데이터
     metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")

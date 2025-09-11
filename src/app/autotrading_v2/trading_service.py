@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from fastapi.concurrency import run_in_threadpool
+from src.app.autotrading_v2.repository import TradingRepository
 from src.common.utils.logger import set_logger
 from src.common.utils.bitcoin.binace import BinanceUtils
 from src.app.autotrading_v2.models import TradeExecutionRequest, TradeExecutionResponse
@@ -20,6 +21,7 @@ class TradingService:
     def __init__(self):
         self.api_key = os.getenv("BINANCE_API_KEY")
         self.secret = os.getenv("BINANCE_SECRET_KEY")
+        self.trading_repository = TradingRepository(logger)
 
         if self.api_key and self.secret:
             logger.info(f"환경변수에서 바이낸스 API 키를 로드했습니다: {self.api_key[:8]}***{self.api_key[-4:]}")
@@ -111,6 +113,10 @@ class TradingService:
                     order_status=None,
                     metadata={"error": f"지원하지 않는 거래 액션: {request.action}"}
                 )
+            try:
+                await self.save_trade_execution(result)
+            except Exception as e:
+                logger.error(f"데이터베이스 저장 실패: {e}")
 
             return result
 
@@ -136,8 +142,8 @@ class TradingService:
             # 직접 ccxt를 사용해서 현재 가격 조회
             import ccxt
             exchange = ccxt.binance({
-                'apiKey': self.api_key,
-                'secret': self.secret,
+                'apiKey': self.api_key or '',
+                'secret': self.secret or '',
                 'sandbox': False,
                 'enableRateLimit': True,
             })
@@ -232,11 +238,32 @@ class TradingService:
                     metadata={"error": f"{base_asset} 잔고가 부족합니다. 사용 가능: {available_balance}"}
                 )
 
+            # 매도할 수량 계산 (USDT 기준으로 BTC 수량 계산)
+            # request.amount_quote는 USDT 금액, 이를 BTC 수량으로 변환
+            current_price = await binance_utils.get_current_price(request.market)
+            btc_quantity = request.amount_quote / current_price
+
+            # 잔고 부족 체크
+            if btc_quantity > available_balance:
+                return TradeExecutionResponse(
+                    status="error",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    action=request.action,
+                    market=request.market,
+                    amount_quote=request.amount_quote,
+                    order_id=None,
+                    executed_amount=None,
+                    executed_price=None,
+                    commission=None,
+                    order_status=None,
+                    metadata={"error": f"매도 수량이 잔고를 초과합니다. 요청: {btc_quantity:.8f} {base_asset}, 보유: {available_balance:.8f} {base_asset}"}
+                )
+
             # 시장가 매도 주문 실행
             order_result = await binance_utils.place_market_order(
                 market=request.market,
                 side='sell',
-                quantity=available_balance  # 전체 잔고 매도
+                quantity=btc_quantity  # 정확한 수량만 매도
             )
 
             logger.info(f"매도 주문 성공: {order_result}")
@@ -275,6 +302,15 @@ class TradingService:
                 order_status=None,
                 metadata={"error": f"매도 주문 실패: {str(e)}"}
             )
+
+    async def save_trade_execution(self, result: TradeExecutionResponse):
+        """거래 실행 결과 저장"""
+        try:
+            logger.info(f"거래 실행 결과 저장: {result}")
+            # await self.trading_repository.save_trade_execution(result.cycle_id, result.position_id, result.action, result.market, result.quantity, result.price, result.value_usdt, result.fee_usdt, result.binance_order_id, result.timestamp, result.metadata)
+        except Exception as e:
+            logger.error(f"거래 실행 결과 저장 실패: {e}")
+
 
     async def health_check(self) -> Dict[str, Any]:
         """서비스 헬스체크"""
