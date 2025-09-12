@@ -149,7 +149,7 @@ class TradingService:
             })
 
             ticker = await run_in_threadpool(exchange.fetch_ticker, request.market)
-            current_price = float(ticker.get("last", 0))
+            current_price = float(str(ticker.get("last", 0)))
 
             if current_price <= 0:
                 return TradeExecutionResponse(
@@ -250,7 +250,7 @@ class TradingService:
             })
 
             ticker = await run_in_threadpool(exchange.fetch_ticker, request.market)
-            current_price = float(ticker.get("last", 0))
+            current_price = float(str(ticker.get("last", 0)))
 
             if current_price <= 0:
                 return TradeExecutionResponse(
