@@ -1,12 +1,11 @@
 # syntax=docker/dockerfile:1.6
-FROM python:3.12-slim
+FROM --platform=linux/amd64 python:3.12-slim
 
 WORKDIR /app
 
-# 시스템 의존성 + 폰트
+# 시스템 의존성
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates wget gnupg \
-      fonts-noto-cjk \
       build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -15,8 +14,7 @@ COPY setup.py /app/
 COPY src /app/src
 
 # 런타임 의존성 설치
-RUN pip install --no-cache-dir "playwright>=1.46" fastapi "uvicorn[standard]>=0.26" pydantic requests \
- && python -m playwright install --with-deps chromium \
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]>=0.26" pydantic requests asyncpg \
  && pip install --no-cache-dir .
 
 EXPOSE 8000

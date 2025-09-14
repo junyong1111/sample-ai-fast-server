@@ -1,6 +1,5 @@
 from fastapi import FastAPI
-from playwright.async_api import async_playwright
-from .url import blog_router, user_router, autotrading_v2_router, information_router
+from .url import user_router, autotrading_v2_router, information_router
 from .analysis.router import router as analysis_router
 
 import logging
@@ -19,14 +18,6 @@ from src.package.db import init_pool, release_pool
 
 async def startup():
     """애플리케이션 시작 시 실행"""
-    # Playwright 시작
-    pw = await async_playwright().start()
-    browser = await pw.chromium.launch(args=["--no-sandbox"])
-    context = await browser.new_context(locale="ko-KR", device_scale_factor=1.0, offline=False)
-    app.state.pw = pw
-    app.state.browser = browser
-    app.state.context = context
-
     try:
         # PostgreSQL 서비스 설정 및 연결
         await init_pool()
@@ -40,14 +31,6 @@ async def startup():
 
 async def shutdown():
     """애플리케이션 종료 시 실행"""
-    try:
-        # Playwright 종료
-        await app.state.context.close()
-        await app.state.browser.close()
-        await app.state.pw.stop()
-    except Exception:
-        pass
-
     try:
         await release_pool()
     except Exception as e:
@@ -115,7 +98,6 @@ app = FastAPI(
 prefix_url = '/api/v2'
 app.include_router(user_router.router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
-app.include_router(blog_router.router, prefix=prefix_url)
 app.include_router(information_router.router, prefix=prefix_url)
 app.include_router(analysis_router, prefix=f"{prefix_url}/analysis")
 
