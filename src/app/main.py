@@ -1,6 +1,5 @@
 from fastapi import FastAPI
-from .url import user_router, autotrading_v2_router, information_router
-from .analysis.router import router as analysis_router
+from .url import user_router, autotrading_v2_router, information_router, analysis_router
 
 import logging
 import os
@@ -99,7 +98,7 @@ prefix_url = '/api/v2'
 app.include_router(user_router.router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
 app.include_router(information_router.router, prefix=prefix_url)
-app.include_router(analysis_router, prefix=f"{prefix_url}/analysis")
+app.include_router(analysis_router.router, prefix=f"{prefix_url}/analysis")
 
 
 
