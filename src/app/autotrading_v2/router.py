@@ -3,7 +3,7 @@ Autotrading V2 API 라우터
 N8n 에이전트 호환 엔드포인트 제공
 """
 
-from fastapi import APIRouter, HTTPException, Query, Body, Depends
+from fastapi import APIRouter, HTTPException, Query, Body, Depends, Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
@@ -15,7 +15,8 @@ from .models import (
     HealthCheckResponse, QuantitativeRequest, QuantitativeResponse,
     RiskAnalysisRequest, RiskAnalysisResponse,
     BalanceRequest, BalanceResponse,
-    TradeExecutionRequest, TradeExecutionResponse
+    TradeExecutionRequest, TradeExecutionResponse,
+    TradeExecutionDataResponse, TradeExecutionListResponse
 )
 
 # 라우터 생성
@@ -264,7 +265,7 @@ async def execute_trade(
                 "target_btc_value": 16.593671150784,
                 "rebalance_amount_usdt": 16.593671150784
             },
-            "user_id": "default_user"
+            "user_idx": 1
         }
     )
 ):
@@ -286,5 +287,105 @@ async def execute_trade(
         raise HTTPException(
             status_code=500,
             detail=f"거래 실행 실패: {str(e)}"
+        )
+
+
+# ===== 거래 실행 데이터 조회 =====
+
+@router.get(
+    "/trades",
+    tags=["Autotrading-Trade"],
+    response_model=TradeExecutionListResponse,
+    summary="거래 실행 데이터 목록 조회",
+    description="사용자의 거래 실행 데이터 목록을 조회합니다. 필터링 옵션을 제공합니다."
+)
+async def get_trade_executions(
+    user_idx: int = Query(..., description="사용자 인덱스"),
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    page_size: int = Query(20, ge=1, le=100, description="페이지 크기"),
+    action: Optional[str] = Query(None, description="거래 액션 필터 (BUY/SELL)"),
+    market: Optional[str] = Query(None, description="마켓 필터 (예: BTC/USDT)"),
+    start_date: Optional[str] = Query(None, description="시작 날짜 (ISO 8601)"),
+    end_date: Optional[str] = Query(None, description="종료 날짜 (ISO 8601)")
+):
+    """
+    거래 실행 데이터 목록 조회
+
+    사용자의 거래 실행 데이터를 페이지네이션과 필터링을 통해 조회합니다.
+    - user_idx: 조회할 사용자 인덱스
+    - page: 페이지 번호 (1부터 시작)
+    - page_size: 페이지당 항목 수 (1-100)
+    - action: 거래 액션 필터 (BUY/SELL)
+    - market: 마켓 필터 (예: BTC/USDT)
+    - start_date: 시작 날짜 (ISO 8601 형식)
+    - end_date: 종료 날짜 (ISO 8601 형식)
+    """
+    try:
+        # 날짜 문자열을 datetime 객체로 변환
+        start_dt = None
+        end_dt = None
+
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+
+        result = await trading_service.get_trades(
+            user_idx=user_idx,
+            page=page,
+            page_size=page_size,
+            action=action,
+            market=market,
+            start_date=start_dt,
+            end_date=end_dt
+        )
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"거래 실행 데이터 조회 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/trades/{trade_id}",
+    tags=["Autotrading-Trade"],
+    response_model=TradeExecutionDataResponse,
+    summary="특정 거래 실행 데이터 조회",
+    description="특정 거래 실행 데이터의 상세 정보를 조회합니다."
+)
+async def get_trade_execution_by_id(
+    trade_id: int = Path(..., description="거래 ID"),
+    user_idx: int = Query(..., description="사용자 인덱스")
+):
+    """
+    특정 거래 실행 데이터 조회
+
+    거래 ID와 사용자 인덱스로 특정 거래 실행 데이터의 상세 정보를 조회합니다.
+    - trade_id: 조회할 거래 ID
+    - user_idx: 사용자 인덱스
+    """
+    try:
+        result = await trading_service.get_trade_by_id(
+            trade_idx=trade_id,
+            user_idx=user_idx
+        )
+
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="거래 실행 데이터를 찾을 수 없습니다."
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"거래 실행 데이터 조회 실패: {str(e)}"
         )
 

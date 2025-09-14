@@ -370,7 +370,7 @@ class TradeExecutionRequest(BaseModel):
     amount_quote: float = Field(..., description="거래할 USDT 금액 (매수/매도 금액)")
     reason: str = Field(..., description="거래 실행 이유")
     evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
-    user_id: Optional[str] = Field(None, description="사용자 ID (현재는 강제 설정용)")
+    user_idx: int = Field(..., description="사용자 인덱스")
 
     @validator('amount_quote')
     def validate_amount_quote(cls, v):
@@ -399,4 +399,80 @@ class TradeExecutionResponse(BaseModel):
     order_status: Optional[str] = Field(None, description="주문 상태")
 
     # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+# === 거래 실행 데이터 저장 모델 ===
+class TradeExecutionData(BaseModel):
+    """거래 실행 데이터 저장 모델"""
+    id: Optional[int] = Field(None, description="거래 ID")
+    user_idx: int = Field(..., description="사용자 인덱스")
+    cycle_id: Optional[int] = Field(None, description="거래 사이클 ID")
+    position_id: Optional[int] = Field(None, description="포지션 ID")
+
+    # 거래 기본 정보
+    action: str = Field(..., description="거래 액션 (BUY/SELL)")
+    market: str = Field(..., description="거래 마켓")
+    quantity: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    value_usdt: float = Field(..., description="USDT 거래 금액")
+    fee_usdt: float = Field(..., description="USDT 수수료")
+
+    # 바이낸스 정보
+    binance_order_id: Optional[str] = Field(None, description="바이낸스 주문 ID")
+    order_status: Optional[str] = Field(None, description="주문 상태")
+
+    # AI 분석 데이터
+    reason: str = Field(..., description="거래 실행 이유")
+    evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
+    ai_analysis_data: Optional[Dict[str, Any]] = Field(None, description="AI 분석 데이터")
+
+    # 시간 정보
+    timestamp: datetime = Field(..., description="거래 실행 시간")
+    created_at: Optional[datetime] = Field(None, description="생성 시간")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+class TradeExecutionDataResponse(BaseModel):
+    """거래 실행 데이터 조회 응답 모델"""
+    id: int = Field(..., description="거래 ID")
+    user_idx: int = Field(..., description="사용자 인덱스")
+    cycle_id: Optional[int] = Field(None, description="거래 사이클 ID")
+    position_id: Optional[int] = Field(None, description="포지션 ID")
+
+    # 거래 기본 정보
+    action: str = Field(..., description="거래 액션")
+    market: str = Field(..., description="거래 마켓")
+    quantity: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    value_usdt: float = Field(..., description="USDT 거래 금액")
+    fee_usdt: float = Field(..., description="USDT 수수료")
+
+    # 바이낸스 정보
+    binance_order_id: Optional[str] = Field(None, description="바이낸스 주문 ID")
+    order_status: Optional[str] = Field(None, description="주문 상태")
+
+    # AI 분석 데이터
+    reason: str = Field(..., description="거래 실행 이유")
+    evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
+    ai_analysis_data: Optional[Dict[str, Any]] = Field(None, description="AI 분석 데이터")
+
+    # 시간 정보
+    timestamp: str = Field(..., description="거래 실행 시간 (ISO 8601)")
+    created_at: str = Field(..., description="생성 시간 (ISO 8601)")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+class TradeExecutionListResponse(BaseModel):
+    """거래 실행 데이터 목록 조회 응답 모델"""
+    status: str = Field(..., description="상태")
+    message: str = Field(..., description="메시지")
+    data: List[TradeExecutionDataResponse] = Field(..., description="거래 실행 데이터 목록")
+    total_count: int = Field(..., description="전체 개수")
+    page: int = Field(..., description="현재 페이지")
+    page_size: int = Field(..., description="페이지 크기")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
