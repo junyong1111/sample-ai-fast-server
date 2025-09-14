@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone, timedelta
 from fastapi.concurrency import run_in_threadpool
+from src.app.user.service import UserService
 from src.common.utils.logger import set_logger
 from src.common.utils.bitcoin.binace import BinanceUtils
 from src.app.autotrading_v2.models import (
@@ -24,18 +25,54 @@ class BalanceService:
     def __init__(self):
         self.api_key = os.getenv("BINANCE_API_KEY")
         self.secret = os.getenv("BINANCE_SECRET_KEY")
+        self.user_service = UserService(logger)
 
         if self.api_key and self.secret:
             logger.info(f"환경변수에서 바이낸스 API 키를 로드했습니다: {self.api_key[:8]}***{self.api_key[-4:]}")
         else:
             logger.warning("환경변수에 BINANCE_API_KEY 또는 BINANCE_SECRET_KEY가 설정되지 않았습니다.")
 
+    def set_api_key(self, api_key: str, secret: str):
+        self.api_key = api_key
+        self.secret = secret
+
     async def get_balance(self, request: BalanceRequest) -> BalanceResponse:
         """잔고 조회"""
         try:
             logger.info(f"잔고 조회 시작: tickers={request.tickers}, include_zero={request.include_zero_balances}")
 
+            user_info = await self.user_service.get_user_exchange_by_user_idx(
+                user_idx=request.user_idx
+            )
+
+            if not user_info:
+                return BalanceResponse(
+                    status="error",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    balances=[],
+                    total_usdt_value=0.0,
+                    requested_tickers=request.tickers,
+                    last_trade=None,
+                    recent_trades=None,
+                    ai_analysis_data=None,
+                    metadata={"error": "사용자 정보를 찾을 수 없습니다."}
+                )
+            api_key = user_info.get("access_key_ref")
+            secret = user_info.get("secret_key_ref")
+            if not api_key or not secret:
+                return BalanceResponse(
+                    status="error",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    balances=[],
+                    total_usdt_value=0.0,
+                    requested_tickers=request.tickers,
+                    last_trade=None,
+                    recent_trades=None,
+                    ai_analysis_data=None,
+                    metadata={"error": "API 키가 설정되지 않았습니다. 환경변수(BINANCE_API_KEY, BINANCE_SECRET_KEY) 설정이 필요합니다."}
+                )
             # API 키 확인
+            self.set_api_key(api_key=api_key, secret=secret)
             if not self.api_key or not self.secret:
                 return BalanceResponse(
                     status="error",

@@ -108,3 +108,10 @@ class UserService:
             message="유저 트레이딩 정보 조회 성공",
             data=result,
         )
+    async def get_user_exchange_by_user_idx(self, user_idx: int):
+        async with connection() as session:
+            user_obj = await self.user_repository.get_user_exchange_by_user_idx(
+                session=session,
+                user_idx=user_idx,
+            )
+        return user_obj

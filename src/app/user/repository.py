@@ -54,3 +54,19 @@ class UserRepository:
                 AND um.status = TRUE
         """
         return await session.fetchrow(query, user_idx)
+
+    async def get_user_exchange_by_user_idx(self, session, user_idx: int):
+        query = """
+            SELECT
+                user_id,
+                user_idx,
+                em."name",
+                uec.access_key_ref,
+                uec.secret_key_ref
+            FROM user_master um
+            JOIN user_exchange_credentials uec on um.idx = uec.user_idx
+            JOIN exchange_master em on em.idx = uec.exchange_idx
+            WHERE um.idx = $1
+                and um.status = TRUE and uec.is_active = TRUE;
+        """
+        return await session.fetchrow(query, user_idx)

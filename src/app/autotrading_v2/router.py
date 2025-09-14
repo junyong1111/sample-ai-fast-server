@@ -224,20 +224,12 @@ async def get_balance(
         example={
             "tickers": ["BTC", "ETH", "USDT"],
             "include_zero_balances": False,
-            "user_id": "default_user",
+            "user_idx": "1",
             "include_trade_history": True,
             "recent_trades_count": 10
         }
     )
 ):
-    """
-    현재 잔고 조회
-
-    바이낸스 API를 통해 현재 계좌의 실시간 잔고를 조회합니다.
-    - tickers: 조회할 코인 티커 목록 (None이면 모든 잔고 조회)
-    - USDT는 자동으로 포함됩니다
-    - include_zero_balances: 0 잔고 포함 여부
-    """
     try:
         result = await balance_service.get_balance(request)
         return result

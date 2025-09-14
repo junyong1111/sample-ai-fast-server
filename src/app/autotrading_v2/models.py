@@ -282,7 +282,7 @@ class BalanceRequest(BaseModel):
     """잔고 조회 요청 모델"""
     tickers: Optional[List[str]] = Field(None, description="조회할 코인 티커 목록 (예: ['BTC', 'ETH']). None이면 모든 잔고 조회")
     include_zero_balances: bool = Field(False, description="0 잔고 포함 여부 (기본값: False)")
-    user_id: Optional[str] = Field(None, description="사용자 ID (현재는 강제 설정용)")
+    user_idx: Optional[int] = Field(None, description="사용자 IDX (현재는 강제 설정용)")
     include_fees_analysis: bool = Field(True, description="수수료 분석 포함 여부 (기본값: True)")
     fee_rate: float = Field(0.001, description="거래 수수료율 (기본값: 0.1%)")
     include_trade_history: bool = Field(True, description="거래 내역 포함 여부 (기본값: True)")
