@@ -15,7 +15,6 @@ class QuantitativeRequest(BaseModel):
     timeframe: Literal["minutes:1", "minutes:5", "minutes:15", "minutes:30", "minutes:60", "minutes:240", "days"] = Field("minutes:60", description="시간프레임")
     count: int = Field(200, description="캔들 개수 (기본값: 200)")
     exchange: Literal["binance", "upbit"] = Field("binance", description="거래소")
-    testnet: bool = Field(True, description="테스트넷 사용 여부")
 
     @validator('count')
     def validate_count(cls, v):
@@ -222,3 +221,258 @@ class ErrorResponse(BaseModel):
     error_code: Optional[str] = Field(None, description="에러 코드")
     timestamp: str = Field(..., description="에러 발생 시간")
     details: Optional[Dict[str, Any]] = Field(None, description="에러 상세 정보")
+
+
+# === 잔고 조회 모델 ===
+class AssetBalance(BaseModel):
+    """자산 잔고 모델"""
+    asset: str = Field(..., description="자산 심볼 (예: BTC, ETH, USDT)")
+    free: float = Field(..., description="사용 가능한 잔고")
+    locked: float = Field(..., description="잠긴 잔고")
+    total: float = Field(..., description="총 잔고")
+    usdt_value: Optional[float] = Field(None, description="USDT 기준 가치")
+    avg_entry_price: Optional[float] = Field(None, description="평균 매수가격")
+
+    # 수수료 관련 정보
+    trading_fees: Optional[Dict[str, Any]] = Field(None, description="거래 수수료 정보")
+    profit_loss: Optional[Dict[str, Any]] = Field(None, description="손익 분석")
+    sell_analysis: Optional[Dict[str, Any]] = Field(None, description="매도 분석")
+
+
+class LastTradeInfo(BaseModel):
+    """마지막 거래 정보 모델"""
+    date: str = Field(..., description="거래 날짜 (ISO 8601)")
+    symbol: str = Field(..., description="거래 심볼 (예: BTC/USDT)")
+    side: str = Field(..., description="거래 방향 (buy/sell)")
+    amount: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    cost: float = Field(..., description="거래 금액")
+    fee: float = Field(..., description="수수료")
+    fee_asset: str = Field(..., description="수수료 자산")
+
+
+class RecentTradeInfo(BaseModel):
+    """최근 거래 정보 모델"""
+    date: str = Field(..., description="거래 날짜 (ISO 8601)")
+    symbol: str = Field(..., description="거래 심볼")
+    side: str = Field(..., description="거래 방향 (buy/sell)")
+    amount: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    cost: float = Field(..., description="거래 금액")
+    fee: float = Field(..., description="수수료")
+    fee_asset: str = Field(..., description="수수료 자산")
+
+
+class AIAnalysisData(BaseModel):
+    """AI 분석용 거래 데이터 모델"""
+    total_trades_count: int = Field(..., description="총 거래 횟수")
+    buy_trades_count: int = Field(..., description="매수 거래 횟수")
+    sell_trades_count: int = Field(..., description="매도 거래 횟수")
+    avg_trade_amount: float = Field(..., description="평균 거래 금액")
+    avg_trade_quantity: float = Field(..., description="평균 거래 수량")
+    total_fees_paid: float = Field(..., description="총 지불 수수료")
+    recent_activity_score: float = Field(..., description="최근 활동성 점수 (0-1)")
+    buy_sell_ratio: float = Field(..., description="매수/매도 비율")
+    trading_frequency: float = Field(..., description="거래 빈도 (거래/일)")
+    avg_trade_interval_hours: float = Field(..., description="평균 거래 간격 (시간)")
+    fee_efficiency: float = Field(..., description="수수료 효율성 (거래금액 대비 수수료 비율)")
+
+
+class BalanceRequest(BaseModel):
+    """잔고 조회 요청 모델"""
+    tickers: Optional[List[str]] = Field(None, description="조회할 코인 티커 목록 (예: ['BTC', 'ETH']). None이면 모든 잔고 조회")
+    include_zero_balances: bool = Field(False, description="0 잔고 포함 여부 (기본값: False)")
+    user_idx: Optional[int] = Field(None, description="사용자 IDX (현재는 강제 설정용)")
+    include_fees_analysis: bool = Field(True, description="수수료 분석 포함 여부 (기본값: True)")
+    fee_rate: float = Field(0.001, description="거래 수수료율 (기본값: 0.1%)")
+    include_trade_history: bool = Field(True, description="거래 내역 포함 여부 (기본값: True)")
+    recent_trades_count: int = Field(10, description="최근 거래 개수 (기본값: 10)")
+
+    @validator('tickers')
+    def validate_tickers(cls, v):
+        if v is not None:
+            # USDT가 없으면 자동으로 추가
+            if 'USDT' not in v:
+                v.append('USDT')
+            # 중복 제거
+            v = list(set(v))
+        return v
+
+    @validator('recent_trades_count')
+    def validate_recent_trades_count(cls, v):
+        if v < 1:
+            raise ValueError('recent_trades_count는 최소 1 이상이어야 합니다')
+        if v > 50:
+            raise ValueError('recent_trades_count는 최대 50 이하여야 합니다')
+        return v
+
+
+class BalanceResponse(BaseModel):
+    """잔고 조회 응답 모델"""
+    status: str = Field(..., description="상태 (success/error)")
+    timestamp: str = Field(..., description="조회 시간")
+
+    # 잔고 정보
+    balances: List[AssetBalance] = Field(..., description="자산별 잔고 목록")
+    total_usdt_value: float = Field(..., description="총 USDT 기준 가치")
+
+    # 요청된 티커 정보
+    requested_tickers: Optional[List[str]] = Field(None, description="요청된 티커 목록")
+
+    # 거래 내역 정보 (선택사항)
+    last_trade: Optional[LastTradeInfo] = Field(None, description="마지막 거래 정보")
+    recent_trades: Optional[List[RecentTradeInfo]] = Field(None, description="최근 거래 내역")
+    ai_analysis_data: Optional[AIAnalysisData] = Field(None, description="AI 분석용 거래 데이터")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+# === 리스크 분석 모델 ===
+class RiskAnalysisRequest(BaseModel):
+    """리스크 분석 요청 모델"""
+    market: str = Field(..., description="거래 마켓 (예: BTC/USDT)")
+    analysis_type: Literal["daily", "weekly", "monthly"] = Field("daily", description="분석 타입")
+    days_back: int = Field(90, description="조회 기간 (일)")
+    personality: Literal["conservative", "neutral", "aggressive"] = Field("neutral", description="투자 성향")
+    include_analysis: bool = Field(True, description="상세 분석 포함 여부")
+
+    @validator('days_back')
+    def validate_days_back(cls, v):
+        if v < 7:
+            raise ValueError('days_back은 최소 7일 이상이어야 합니다')
+        if v > 365:
+            raise ValueError('days_back은 최대 365일 이하여야 합니다')
+        return v
+
+
+class RiskAnalysisResponse(BaseModel):
+    """리스크 분석 응답 모델"""
+    status: str = Field(..., description="상태 (success/error)")
+    market: str = Field(..., description="거래 마켓")
+    timestamp: str = Field(..., description="분석 시간")
+
+    # 리스크 등급
+    risk_grade: Optional[str] = Field(None, description="리스크 등급 (A-F)")
+
+    # 분석 결과
+    analysis: Optional[Dict[str, Any]] = Field(None, description="리스크 분석 결과")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+# === 거래 실행 모델 ===
+class TradeExecutionRequest(BaseModel):
+    """거래 실행 요청 모델"""
+    action: Literal["BUY", "SELL"] = Field(..., description="거래 액션 (BUY/SELL)")
+    market: str = Field(..., description="거래 마켓 (예: BTC/USDT)")
+    amount_quote: float = Field(..., description="거래할 USDT 금액 (매수/매도 금액)")
+    reason: str = Field(..., description="거래 실행 이유")
+    evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
+    user_idx: int = Field(..., description="사용자 인덱스")
+
+    @validator('amount_quote')
+    def validate_amount_quote(cls, v):
+        if v <= 0:
+            raise ValueError('거래 금액은 0보다 커야 합니다')
+        return v
+
+
+class TradeExecutionResponse(BaseModel):
+    """거래 실행 응답 모델"""
+    status: str = Field(..., description="상태 (success/error)")
+    timestamp: str = Field(..., description="거래 실행 시간")
+
+    # 거래 정보
+    action: str = Field(..., description="실행된 거래 액션")
+    market: str = Field(..., description="거래 마켓")
+    amount_quote: float = Field(..., description="거래 금액")
+
+    # 거래 결과
+    order_id: Optional[str] = Field(None, description="바이낸스 주문 ID")
+    executed_amount: Optional[float] = Field(None, description="실제 체결된 수량")
+    executed_price: Optional[float] = Field(None, description="체결 가격")
+    commission: Optional[float] = Field(None, description="수수료")
+
+    # 거래 상태
+    order_status: Optional[str] = Field(None, description="주문 상태")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+# === 거래 실행 데이터 저장 모델 ===
+class TradeExecutionData(BaseModel):
+    """거래 실행 데이터 저장 모델"""
+    id: Optional[int] = Field(None, description="거래 ID")
+    user_idx: int = Field(..., description="사용자 인덱스")
+    cycle_id: Optional[int] = Field(None, description="거래 사이클 ID")
+    position_id: Optional[int] = Field(None, description="포지션 ID")
+
+    # 거래 기본 정보
+    action: str = Field(..., description="거래 액션 (BUY/SELL)")
+    market: str = Field(..., description="거래 마켓")
+    quantity: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    value_usdt: float = Field(..., description="USDT 거래 금액")
+    fee_usdt: float = Field(..., description="USDT 수수료")
+
+    # 바이낸스 정보
+    binance_order_id: Optional[str] = Field(None, description="바이낸스 주문 ID")
+    order_status: Optional[str] = Field(None, description="주문 상태")
+
+    # AI 분석 데이터
+    reason: str = Field(..., description="거래 실행 이유")
+    evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
+    ai_analysis_data: Optional[Dict[str, Any]] = Field(None, description="AI 분석 데이터")
+
+    # 시간 정보
+    timestamp: datetime = Field(..., description="거래 실행 시간")
+    created_at: Optional[datetime] = Field(None, description="생성 시간")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+class TradeExecutionDataResponse(BaseModel):
+    """거래 실행 데이터 조회 응답 모델"""
+    id: int = Field(..., description="거래 ID")
+    user_idx: int = Field(..., description="사용자 인덱스")
+    cycle_id: Optional[int] = Field(None, description="거래 사이클 ID")
+    position_id: Optional[int] = Field(None, description="포지션 ID")
+
+    # 거래 기본 정보
+    action: str = Field(..., description="거래 액션")
+    market: str = Field(..., description="거래 마켓")
+    quantity: float = Field(..., description="거래 수량")
+    price: float = Field(..., description="거래 가격")
+    value_usdt: float = Field(..., description="USDT 거래 금액")
+    fee_usdt: float = Field(..., description="USDT 수수료")
+
+    # 바이낸스 정보
+    binance_order_id: Optional[str] = Field(None, description="바이낸스 주문 ID")
+    order_status: Optional[str] = Field(None, description="주문 상태")
+
+    # AI 분석 데이터
+    reason: str = Field(..., description="거래 실행 이유")
+    evidence: Dict[str, Any] = Field(..., description="거래 근거 데이터")
+    ai_analysis_data: Optional[Dict[str, Any]] = Field(None, description="AI 분석 데이터")
+
+    # 시간 정보
+    timestamp: str = Field(..., description="거래 실행 시간 (ISO 8601)")
+    created_at: str = Field(..., description="생성 시간 (ISO 8601)")
+
+    # 메타데이터
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")
+
+
+class TradeExecutionListResponse(BaseModel):
+    """거래 실행 데이터 목록 조회 응답 모델"""
+    status: str = Field(..., description="상태")
+    message: str = Field(..., description="메시지")
+    data: List[TradeExecutionDataResponse] = Field(..., description="거래 실행 데이터 목록")
+    total_count: int = Field(..., description="전체 개수")
+    page: int = Field(..., description="현재 페이지")
+    page_size: int = Field(..., description="페이지 크기")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="추가 메타데이터")

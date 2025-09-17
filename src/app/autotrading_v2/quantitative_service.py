@@ -50,7 +50,6 @@ class QuantitativeServiceV2:
         timeframe: str = "minutes:60",
         count: int = 200,
         exchange: str = "binance",
-        testnet: bool = True
     ) -> Dict[str, Any]:
         """
         시장 정량지표 분석 실행
@@ -60,7 +59,6 @@ class QuantitativeServiceV2:
             timeframe: 시간프레임
             count: 캔들 개수
             exchange: 거래소
-            testnet: 테스트넷 사용 여부
 
         Returns:
             Dict[str, Any]: 분석 결과
@@ -70,7 +68,7 @@ class QuantitativeServiceV2:
             logger.info(f"📊 {market} | {timeframe} | {count}개 캔들 | {exchange}")
 
             # ===== 1단계-1: OHLCV 데이터 수집 =====
-            ohlcv_df = await self._get_ohlcv_data(market, timeframe, count, exchange, testnet)
+            ohlcv_df = await self._get_ohlcv_data(market, timeframe, count, exchange)
 
             if ohlcv_df is None or len(ohlcv_df) == 0:
                 raise ValueError(f"OHLCV 데이터를 가져올 수 없습니다: {market}")
@@ -151,7 +149,6 @@ class QuantitativeServiceV2:
                         "data_points": len(ohlcv_df),
                         "config": self.indicator_config,
                         "exchange": exchange,
-                        "testnet": testnet
                     }
                 }
             }
@@ -186,23 +183,34 @@ class QuantitativeServiceV2:
         market: str,
         timeframe: str,
         count: int,
-        exchange: str,
-        testnet: bool
+        exchange: str
     ) -> Optional[pd.DataFrame]:
         """OHLCV 데이터 수집"""
         try:
-            # 거래소 팩토리를 통해 인스턴스 생성
-            exchange_instance = ExchangeFactory.create_exchange(
-                exchange_type=exchange,
-                testnet=testnet
-            )
+            # 공개 API로 OHLCV 데이터 조회 (ccxt 직접 사용)
+            import ccxt
+
+            # 바이낸스 거래소 인스턴스 생성 (공개 API만 사용)
+            exchange_instance = ccxt.binance({
+                'sandbox': False,  # 메인넷 사용
+                'enableRateLimit': True,
+            })
+
+            # 시간프레임 변환
+            timeframe_map = {
+                "minutes:1": "1m", "minutes:5": "5m", "minutes:15": "15m",
+                "minutes:30": "30m", "minutes:60": "1h", "minutes:240": "4h", "days": "1d"
+            }
+            ccxt_timeframe = timeframe_map.get(timeframe, "1h")
 
             # OHLCV 데이터 가져오기
-            ohlcv_df = await exchange_instance.get_ohlcv_df(
-                market=market,
-                tf=timeframe,
-                count=count
-            )
+            ohlcv_data = exchange_instance.fetch_ohlcv(market, ccxt_timeframe, limit=count)
+
+            # pandas DataFrame으로 변환
+            import pandas as pd
+            ohlcv_df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
+            ohlcv_df.set_index('timestamp', inplace=True)
 
             # 데이터 검증 (최소 20개로 줄임)
             min_required = 50

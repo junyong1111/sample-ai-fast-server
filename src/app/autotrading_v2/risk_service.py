@@ -123,38 +123,26 @@ class RiskAnalysisService:
             # ===== 6단계: 리스크 에이전트는 투자 권장사항을 제공하지 않음 =====
             recommendations = None
 
-            # ===== 7단계: 결과 구성 =====
+            # ===== 7단계: 결과 구성 (RiskAnalysisResponse 모델에 맞게) =====
             result = {
                 "status": "success",
                 "market": market,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-
-                # 시장 데이터
-                "market_data": market_data.dict(),
-
-                # 리스크 지표
-                "risk_indicators": risk_indicators.dict(),
-
-                # 상관관계 분석
-                "correlation_analysis": correlation_analysis.dict(),
-
-                # AI 분석
-                "ai_analysis": ai_analysis.dict() if ai_analysis else None,
-
-                # 최종 리스크 레벨
-                "market_risk_level": market_risk_level,
-                "risk_off_signal": risk_off_signal,
-                "confidence": confidence,
-
-                # 권장사항 (리스크 에이전트는 제공하지 않음)
-                "recommendations": None,
-
-                # 메타데이터
+                "risk_grade": market_risk_level,  # 리스크 등급
+                "analysis": {  # 분석 결과
+                    "market_data": market_data.dict(),
+                    "risk_indicators": risk_indicators.dict(),
+                    "correlation_analysis": correlation_analysis.dict(),
+                    "ai_analysis": ai_analysis.dict() if ai_analysis else None,
+                    "risk_off_signal": risk_off_signal,
+                    "confidence": confidence,
+                    "recommendations": None
+                },
                 "metadata": {
                     "analysis_period": f"{days_back}일",
                     "analysis_type": analysis_type,
                     "ai_analysis_included": ai_analysis is not None,
-                    "data_points": 0  # MarketData는 단일 값이므로 길이 개념이 없음
+                    "data_points": 0
                 }
             }
 
@@ -169,14 +157,8 @@ class RiskAnalysisService:
                 "status": "error",
                 "market": market,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "market_data": {},
-                "risk_indicators": {},
-                "correlation_analysis": {},
-                "ai_analysis": None,
-                "market_risk_level": "UNKNOWN",
-                "risk_off_signal": False,
-                "confidence": 0.0,
-                "recommendations": None,
+                "risk_grade": None,
+                "analysis": None,
                 "metadata": {"error": str(e)}
             }
 

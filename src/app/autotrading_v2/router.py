@@ -3,28 +3,30 @@ Autotrading V2 API 라우터
 N8n 에이전트 호환 엔드포인트 제공
 """
 
-from fastapi import APIRouter, HTTPException, Query, Body, Depends
+from fastapi import APIRouter, HTTPException, Query, Body, Depends, Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 from .quantitative_service import QuantitativeServiceV2
 from .risk_service import RiskAnalysisService
+from .balance_service import BalanceService
+from .trading_service import TradingService
 from .models import (
-    QuantitativeRequest, QuantitativeResponse,
-    OnchainRequest, OnchainResponse,
-    OffchainRequest, OffchainResponse,
-    IntegrationRequest, IntegrationResponse,
-    DashboardRequest, DashboardResponse,
-    HealthCheckResponse, ErrorResponse
+    HealthCheckResponse, QuantitativeRequest, QuantitativeResponse,
+    RiskAnalysisRequest, RiskAnalysisResponse,
+    BalanceRequest, BalanceResponse,
+    TradeExecutionRequest, TradeExecutionResponse,
+    TradeExecutionDataResponse, TradeExecutionListResponse
 )
-from .risk_models import RiskAnalysisRequest, RiskAnalysisResponse
 
 # 라우터 생성
-router = APIRouter(prefix="/v2", tags=["Autotrading V2"])
+router = APIRouter()
 
 # 서비스 인스턴스
 quantitative_service = QuantitativeServiceV2()
 risk_service = None  # 지연 초기화
+balance_service = BalanceService()
+trading_service = TradingService()
 
 def get_risk_service():
     """리스크 분석 서비스 지연 초기화"""
@@ -38,6 +40,7 @@ def get_risk_service():
 
 @router.post(
     "/quantitative/analyze",
+    tags=["Autotrading-Quantitative"],
     response_model=QuantitativeResponse,
     summary="정량지표 분석 (N8n 호환)",
     description="차트 기반 기술적 지표를 분석하여 거래 신호를 생성합니다. N8n 에이전트에서 정기적으로 호출할 수 있습니다."
@@ -50,7 +53,6 @@ async def analyze_quantitative_indicators(
             "timeframe": "minutes:60",
             "count": 200,
             "exchange": "binance",
-            "testnet": True
         }
     )
 ):
@@ -65,7 +67,6 @@ async def analyze_quantitative_indicators(
             timeframe=request.timeframe,
             count=request.count,
             exchange=request.exchange,
-            testnet=request.testnet
         )
 
         return QuantitativeResponse(**result)
@@ -77,10 +78,9 @@ async def analyze_quantitative_indicators(
         )
 
 
-
-
 @router.get(
     "/quantitative/indicators",
+    tags=["Autotrading-Quantitative"],
     summary="지원하는 기술적 지표 목록",
     description="현재 지원하는 기술적 지표들의 목록을 조회합니다."
 )
@@ -95,6 +95,7 @@ async def get_supported_indicators():
 
 @router.get(
     "/quantitative/regime-weights",
+    tags=["Autotrading-Quantitative"],
     summary="레짐별 가중치 조회",
     description="추세장과 횡보장의 지표별 가중치를 조회합니다."
 )
@@ -116,6 +117,7 @@ async def get_regime_weights():
 
 @router.post(
     "/risk/analyze",
+    tags=["Autotrading-Risk"],
     response_model=RiskAnalysisResponse,
     summary="리스크 분석 (N8n 호환)",
     description="yfinance, LangChain, LangGraph를 활용하여 시장 리스크를 분석하고 요약합니다."
@@ -147,6 +149,9 @@ async def analyze_risk(
             personality=request.personality,
             include_analysis=request.include_analysis
         )
+        # 디버깅: result 구조 확인
+        print(f"DEBUG: result keys = {result.keys() if isinstance(result, dict) else 'Not a dict'}")
+        print(f"DEBUG: result = {result}")
 
         return RiskAnalysisResponse(**result)
 
@@ -157,138 +162,12 @@ async def analyze_risk(
         )
 
 
-@router.get(
-    "/risk/health",
-    summary="리스크 분석 서비스 헬스체크",
-    description="리스크 분석 서비스의 상태를 확인합니다."
-)
-async def risk_health_check():
-    """리스크 분석 서비스 헬스체크"""
-    try:
-        # 지연 초기화된 서비스 사용
-        service = get_risk_service()
-        health_status = await service.health_check()
-
-        return {
-            "status": "success",
-            "service": "risk_analysis",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": health_status
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "service": "risk_analysis",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": str(e)
-        }
-
-
-# ===== 3단계: 온체인 지표 (준비 중) =====
-
-@router.post(
-    "/onchain/analyze",
-    response_model=OnchainResponse,
-    summary="온체인 지표 분석 (준비 중)",
-    description="온체인 데이터를 분석하여 투자심리지표를 생성합니다."
-)
-async def analyze_onchain_indicators(request: OnchainRequest):
-    """온체인 지표 분석 (준비 중)"""
-    return {
-        "status": "error",
-        "market": request.market,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "indicators": {},
-        "onchain_score": 0.0,
-        "signal": "NEUTRAL",
-        "confidence": 0.0,
-        "metadata": {"message": "온체인 지표 분석은 2단계에서 구현 예정"}
-    }
-
-
-# ===== 3단계: 오프체인 지표 (준비 중) =====
-
-@router.post(
-    "/offchain/analyze",
-    response_model=OffchainResponse,
-    summary="오프체인 지표 분석 (준비 중)",
-    description="뉴스, 소셜미디어, 거시경제 데이터를 분석하여 감성지표를 생성합니다."
-)
-async def analyze_offchain_indicators(request: OffchainRequest):
-    """오프체인 지표 분석 (준비 중)"""
-    return {
-        "status": "error",
-        "keywords": request.keywords,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "sentiment": {},
-        "offchain_score": 0.0,
-        "signal": "NEUTRAL",
-        "confidence": 0.0,
-        "metadata": {"message": "오프체인 지표 분석은 3단계에서 구현 예정"}
-    }
-
-
-# ===== 4단계: 통합 분석 (준비 중) =====
-
-@router.post(
-    "/integration/analyze",
-    response_model=IntegrationResponse,
-    summary="통합 분석 (준비 중)",
-    description="정량, 온체인, 오프체인 지표를 통합하여 최종 거래 신호를 생성합니다."
-)
-async def analyze_integration(request: IntegrationRequest):
-    """통합 분석 (준비 중)"""
-    return {
-        "status": "error",
-        "market": request.market,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "quantitative_score": 0.0,
-        "onchain_score": 0.0,
-        "offchain_score": 0.0,
-        "weights": {
-            "quant_weight": request.quant_weight,
-            "onchain_weight": request.onchain_weight,
-            "offchain_weight": request.offchain_weight
-        },
-        "final_score": 0.0,
-        "position_size": 0.0,
-        "action": "HOLD",
-        "stop_loss": None,
-        "take_profit": None,
-        "confidence": 0.0,
-        "metadata": {"message": "통합 분석은 4단계에서 구현 예정"}
-    }
-
-
-# ===== 5단계: 대시보드 (준비 중) =====
-
-@router.post(
-    "/dashboard",
-    response_model=DashboardResponse,
-    summary="대시보드 데이터 (준비 중)",
-    description="실시간 모니터링 및 성과 분석 대시보드 데이터를 제공합니다."
-)
-async def get_dashboard_data(request: DashboardRequest):
-    """대시보드 데이터 (준비 중)"""
-    return {
-        "status": "error",
-        "market": request.market,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "current_status": {},
-        "indicators_status": {},
-        "trading_signals": {},
-        "performance": {},
-        "alerts": [],
-        "history": None,
-        "metadata": {"message": "대시보드는 5단계에서 구현 예정"}
-    }
-
 
 # ===== 헬스체크 및 유틸리티 =====
 
 @router.get(
     "/health",
+    tags=["Autotrading"],
     response_model=HealthCheckResponse,
     summary="서비스 헬스체크",
     description="Autotrading V2 서비스의 상태를 확인합니다."
@@ -330,4 +209,183 @@ async def health_check():
             error=str(e)
         )
 
+
+# ===== 잔고 조회 =====
+
+@router.post(
+    "/balance",
+    tags=["Autotrading-Balance"],
+    response_model=BalanceResponse,
+    summary="현재 잔고 조회",
+    description="바이낸스 API를 통해 현재 계좌의 실시간 잔고를 조회합니다. 특정 티커를 지정하면 해당 코인만 조회합니다."
+)
+async def get_balance(
+    request: BalanceRequest = Body(
+        ...,
+        example={
+            "tickers": ["BTC", "ETH", "USDT"],
+            "include_zero_balances": False,
+            "user_idx": "1",
+            "include_trade_history": True,
+            "recent_trades_count": 10
+        }
+    )
+):
+    try:
+        result = await balance_service.get_balance(request)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"잔고 조회 실패: {str(e)}"
+        )
+
+# ===== 거래 실행 =====
+
+@router.post(
+    "/trade/execute",
+    tags=["Autotrading-Trade"],
+    response_model=TradeExecutionResponse,
+    summary="거래 실행",
+    description="AI 분석 결과에 따라 바이낸스에서 실제 매수/매도 주문을 실행합니다."
+)
+async def execute_trade(
+    request: TradeExecutionRequest = Body(
+        ...,
+        example={
+            "action": "BUY",
+            "market": "BTC/USDT",
+            "amount_quote": 16.59,
+            "reason": "Target is 9.00% (16.59367115 USDT) of total 184.37412389760001 USDT portfolio. Current BTC holding is 0.0 USDT. Rebalance requires buying 16.59367115 USDT worth of BTC.",
+            "evidence": {
+                "target_btc_percentage": 9,
+                "total_portfolio_value": 184.37412389760001,
+                "current_btc_value": 0,
+                "target_btc_value": 16.593671150784,
+                "rebalance_amount_usdt": 16.593671150784
+            },
+            "user_idx": 1
+        }
+    )
+):
+    """
+    거래 실행
+
+    AI 분석 결과에 따라 바이낸스에서 실제 매수/매도 주문을 실행합니다.
+    - action: BUY (매수) 또는 SELL (매도)
+    - market: 거래할 마켓 (예: BTC/USDT)
+    - amount_quote: 거래할 USDT 금액
+    - reason: 거래 실행 이유
+    - evidence: 거래 근거 데이터
+    """
+    try:
+        result = await trading_service.execute_trade(request)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"거래 실행 실패: {str(e)}"
+        )
+
+
+# ===== 거래 실행 데이터 조회 =====
+
+@router.get(
+    "/trades",
+    tags=["Autotrading-Trade"],
+    response_model=TradeExecutionListResponse,
+    summary="거래 실행 데이터 목록 조회",
+    description="사용자의 거래 실행 데이터 목록을 조회합니다. 필터링 옵션을 제공합니다."
+)
+async def get_trade_executions(
+    user_idx: int = Query(..., description="사용자 인덱스"),
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    page_size: int = Query(20, ge=1, le=100, description="페이지 크기"),
+    action: Optional[str] = Query(None, description="거래 액션 필터 (BUY/SELL)"),
+    market: Optional[str] = Query(None, description="마켓 필터 (예: BTC/USDT)"),
+    start_date: Optional[str] = Query(None, description="시작 날짜 (ISO 8601)"),
+    end_date: Optional[str] = Query(None, description="종료 날짜 (ISO 8601)")
+):
+    """
+    거래 실행 데이터 목록 조회
+
+    사용자의 거래 실행 데이터를 페이지네이션과 필터링을 통해 조회합니다.
+    - user_idx: 조회할 사용자 인덱스
+    - page: 페이지 번호 (1부터 시작)
+    - page_size: 페이지당 항목 수 (1-100)
+    - action: 거래 액션 필터 (BUY/SELL)
+    - market: 마켓 필터 (예: BTC/USDT)
+    - start_date: 시작 날짜 (ISO 8601 형식)
+    - end_date: 종료 날짜 (ISO 8601 형식)
+    """
+    try:
+        # 날짜 문자열을 datetime 객체로 변환
+        start_dt = None
+        end_dt = None
+
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+
+        result = await trading_service.get_trades(
+            user_idx=user_idx,
+            page=page,
+            page_size=page_size,
+            action=action,
+            market=market,
+            start_date=start_dt,
+            end_date=end_dt
+        )
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"거래 실행 데이터 조회 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/trades/{trade_id}",
+    tags=["Autotrading-Trade"],
+    response_model=TradeExecutionDataResponse,
+    summary="특정 거래 실행 데이터 조회",
+    description="특정 거래 실행 데이터의 상세 정보를 조회합니다."
+)
+async def get_trade_execution_by_id(
+    trade_id: int = Path(..., description="거래 ID"),
+    user_idx: int = Query(..., description="사용자 인덱스")
+):
+    """
+    특정 거래 실행 데이터 조회
+
+    거래 ID와 사용자 인덱스로 특정 거래 실행 데이터의 상세 정보를 조회합니다.
+    - trade_id: 조회할 거래 ID
+    - user_idx: 사용자 인덱스
+    """
+    try:
+        result = await trading_service.get_trade_by_id(
+            trade_idx=trade_id,
+            user_idx=user_idx
+        )
+
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="거래 실행 데이터를 찾을 수 없습니다."
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"거래 실행 데이터 조회 실패: {str(e)}"
+        )
 

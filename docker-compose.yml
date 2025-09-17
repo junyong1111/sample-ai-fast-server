@@ -1,6 +1,6 @@
 services:
   n8n:
-    image: docker.n8n.io/n8nio/n8n
+    image: docker.n8n.io/n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
     environment:
@@ -15,37 +15,39 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
     ports:
-      - "5678:5678"      # host 모드 대신 포트 매핑 사용
+      - "5678:5678"
     networks: [appnet]
 
   fastapi:
     build:
-      context: .         # ⬅️ setup.py와 src/가 있는 **프로젝트 루트**
+      context: .
       dockerfile: src/Dockerfile
     container_name: fastapi
     restart: unless-stopped
     command: uvicorn src.app.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "8000:8000"      # 외부 접근용
+      - "8000:8000"
     environment:
-      # PostgreSQL 설정
-      POSTGRESQL_DB_HOST: "postgresql"
-      POSTGRESQL_DB_PORT: "5432"
-      POSTGRESQL_DB_DATABASE: "autotrading"
-      POSTGRESQL_DB_USER: "devjun"
-      POSTGRESQL_DB_PASSWORD: "X7pQa9Lm!"
-
-      # MongoDB 설정
-      MONGODB_URL: "mongodb://devjun:X7pQa9Lm!@mongodb:27017"
-      MONGODB_DATABASE: "autotrading"
+      POSTGRESQL_DB_HOST: "host.docker.internal"  # 로컬호스트의 SSH 터널 사용
+      POSTGRESQL_DB_PORT: "15432"
+      POSTGRESQL_DB_DATABASE: ${POSTGRESQL_DB_DATABASE}
+      POSTGRESQL_DB_USER: ${POSTGRESQL_DB_USER}
+      POSTGRESQL_DB_PASSWORD: ${POSTGRESQL_DB_PASSWORD}
+      BINANCE_API_KEY: ${BINANCE_API_KEY}
+      BINANCE_SECRET_KEY: ${BINANCE_SECRET_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      postgresql:
+        condition: service_healthy             # DB 헬스체크 통과 후 기동
     networks: [appnet]
 
   postgresql:
     image: postgres:15
     container_name: postgresql
     restart: unless-stopped
+    # 🔒 외부 노출 금지: EC2의 127.0.0.1로만 바인딩
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     networks: [appnet]
     volumes:
       - postgresql_data:/var/lib/postgresql/data
@@ -53,21 +55,14 @@ services:
     environment:
       POSTGRES_DB: autotrading
       POSTGRES_USER: devjun
-      POSTGRES_PASSWORD: X7pQa9Lm!
+      POSTGRES_PASSWORD: "X7pQa9Lm!"
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
-
-  mongodb:
-    image: mongo
-    container_name: mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    networks: [appnet]
-    volumes:
-      - mongodb_data:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: devjun
-      MONGO_INITDB_ROOT_PASSWORD: X7pQa9Lm!
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devjun -d autotrading -h 127.0.0.1 -p 5432 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 networks:
   appnet:
@@ -76,4 +71,3 @@ networks:
 volumes:
   n8n_data:
   postgresql_data:
-  mongodb_data:

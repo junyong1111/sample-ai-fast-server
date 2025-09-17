@@ -1,10 +1,5 @@
-"""
-🚀 FastAPI autotrading
-"""
-
 from fastapi import FastAPI
-from playwright.async_api import async_playwright
-from .url import blog_router, autotrading_router, trading_router, user_router, autotrading_v2_router
+from .url import user_router, autotrading_v2_router, information_router, analysis_router
 
 import logging
 import os
@@ -16,42 +11,12 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from src.common.utils.logger import set_logger
 from src.common.error import JSendError, ErrorCode
-from src.app.autotrading.database import mongodb_service
 from src.config.setting import settings
 from src.package.db import init_pool, release_pool
 
 
 async def startup():
     """애플리케이션 시작 시 실행"""
-    # Playwright 시작
-    pw = await async_playwright().start()
-    browser = await pw.chromium.launch(args=["--no-sandbox"])
-    context = await browser.new_context(locale="ko-KR", device_scale_factor=1.0, offline=False)
-    app.state.pw = pw
-    app.state.browser = browser
-    app.state.context = context
-
-    # MongoDB 연결
-    try:
-        # 환경변수에서 MongoDB 설정 가져오기
-        mongodb_url = settings.MONGODB_URL
-        mongodb_database = settings.MONGODB_DATABASE
-
-        # MongoDB 서비스 설정 및 연결
-        mongodb_service.connection_string = mongodb_url
-        mongodb_service.database_name = mongodb_database
-        await mongodb_service.connect()
-
-        logger.info(f"[MongoDB 연결 성공] {mongodb_url}/{mongodb_database}")
-
-    except Exception as e:
-        logger.error(f"""
-                        [MongoDB 연결 실패]
-                        error : {e.__class__.__name__}
-                        message : {e}
-                        MongoDB 없이 서비스가 시작됩니다. 거래 신호 저장 기능이 제한됩니다."
-                    """)
-
     try:
         # PostgreSQL 서비스 설정 및 연결
         await init_pool()
@@ -65,24 +30,6 @@ async def startup():
 
 async def shutdown():
     """애플리케이션 종료 시 실행"""
-    try:
-        # Playwright 종료
-        await app.state.context.close()
-        await app.state.browser.close()
-        await app.state.pw.stop()
-    except Exception:
-        pass
-
-    # MongoDB 연결 해제
-    try:
-        await mongodb_service.disconnect()
-        logger.info(f"[MongoDB 연결 해제 완료] {mongodb_service.connection_string}/{mongodb_service.database_name}")
-    except Exception as e:
-        logger.error(f"""
-                        [MongoDB 연결 해제 실패]
-                        error : {e.__class__.__name__}
-                        message : {e}
-                    """)
     try:
         await release_pool()
     except Exception as e:
@@ -147,12 +94,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-prefix_url = '/api/v1'
-app.include_router(user_router, prefix=prefix_url)
+prefix_url = '/api/v2'
+app.include_router(user_router.router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
-app.include_router(autotrading_router.router, prefix=prefix_url)
-app.include_router(trading_router.router, prefix=prefix_url)
-app.include_router(blog_router.router, prefix=prefix_url)
+app.include_router(information_router.router, prefix=prefix_url)
+app.include_router(analysis_router.router, prefix=f"{prefix_url}/analysis")
 
 
 
