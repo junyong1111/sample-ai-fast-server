@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Literal, List, Union
+from typing import Dict, Any, Literal, List, Optional, Union
 from datetime import datetime, timezone
 from src.common.utils.logger import set_logger
 from src.config.setting import settings

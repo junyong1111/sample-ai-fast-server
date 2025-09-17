@@ -10,6 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from src.app.user.service import UserService
 from src.common.utils.logger import set_logger
 from src.common.utils.bitcoin.binace import BinanceUtils
+from src.common.utils.json_sanitizer import sanitize_for_json
 from src.app.autotrading_v2.models import (
     BalanceRequest, BalanceResponse, AssetBalance,
     LastTradeInfo, RecentTradeInfo, AIAnalysisData
@@ -243,24 +244,32 @@ class BalanceService:
                 except Exception as e:
                     logger.error(f"거래 내역 조회 실패: {str(e)}", exc_info=True)
 
+            # JSON 직렬화를 위해 inf 값 변환
+            sanitized_balances = sanitize_for_json(balances)
+            sanitized_last_trade = sanitize_for_json(last_trade)
+            sanitized_recent_trades = sanitize_for_json(recent_trades)
+            sanitized_ai_analysis_data = sanitize_for_json(ai_analysis_data)
+            sanitized_summary = sanitize_for_json(summary)
+
             return BalanceResponse(
                 status="success",
                 timestamp=datetime.now(timezone.utc).isoformat(),
-                balances=balances,
+                balances=sanitized_balances,
                 total_usdt_value=total_usdt_value,
                 requested_tickers=target_assets,
-                last_trade=last_trade,
-                recent_trades=recent_trades,
-                ai_analysis_data=ai_analysis_data,
+                last_trade=sanitized_last_trade,
+                recent_trades=sanitized_recent_trades,
+                ai_analysis_data=sanitized_ai_analysis_data,
                 metadata={
                     "total_assets": len(balances),
                     "api_key_masked": f"{self.api_key[:8]}***{self.api_key[-4:]}",
-                    "summary": summary
+                    "summary": sanitized_summary
                 }
             )
 
         except Exception as e:
             logger.error(f"잔고 조회 실패: {e}")
+            error_metadata = {"error": f"잔고 조회 중 오류가 발생했습니다: {str(e)}"}
             return BalanceResponse(
                 status="error",
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -270,7 +279,7 @@ class BalanceService:
                 last_trade=None,
                 recent_trades=None,
                 ai_analysis_data=None,
-                metadata={"error": f"잔고 조회 중 오류가 발생했습니다: {str(e)}"}
+                metadata=sanitize_for_json(error_metadata)
             )
 
     def _create_summary(self, balances: List[AssetBalance], total_usdt_value: float, requested_tickers: Optional[List[str]]) -> Dict[str, Any]:
@@ -485,8 +494,13 @@ class BalanceService:
             )
             fee_efficiency = (total_fees / total_amount) * 100 if total_amount > 0 else 0.0
 
-            # 매수/매도 비율
-            buy_sell_ratio = buy_count / sell_count if sell_count > 0 else float('inf') if buy_count > 0 else 0.0
+            # 매수/매도 비율 (inf 값 방지)
+            if sell_count > 0:
+                buy_sell_ratio = buy_count / sell_count
+            elif buy_count > 0:
+                buy_sell_ratio = 999.0  # 매우 큰 값으로 대체
+            else:
+                buy_sell_ratio = 0.0
 
             # 거래 빈도 계산 (최근 30일 기준)
             now = datetime.now(timezone.utc)
@@ -505,7 +519,8 @@ class BalanceService:
             # 최근 활동성 점수 (0-1)
             recent_activity_score = min(trading_frequency / 2.0, 1.0)  # 하루 2회 거래를 1.0으로 정규화
 
-            return AIAnalysisData(
+            # AI 분석 데이터 생성 후 sanitize 적용
+            ai_data = AIAnalysisData(
                 total_trades_count=total_trades,
                 buy_trades_count=buy_count,
                 sell_trades_count=sell_count,
@@ -519,9 +534,16 @@ class BalanceService:
                 fee_efficiency=round(fee_efficiency, 3)
             )
 
+            # dict로 변환 후 sanitize 적용
+            ai_data_dict = ai_data.dict()
+            sanitized_ai_data_dict = sanitize_for_json(ai_data_dict)
+
+            # 다시 AIAnalysisData 객체로 변환
+            return AIAnalysisData(**sanitized_ai_data_dict)
+
         except Exception as e:
             logger.error(f"AI 분석 데이터 생성 실패: {str(e)}")
-            return AIAnalysisData(
+            error_ai_data = AIAnalysisData(
                 total_trades_count=0,
                 buy_trades_count=0,
                 sell_trades_count=0,
@@ -534,3 +556,9 @@ class BalanceService:
                 avg_trade_interval_hours=0.0,
                 fee_efficiency=0.0
             )
+
+            # dict로 변환 후 sanitize 적용
+            error_ai_data_dict = error_ai_data.dict()
+            sanitized_error_ai_data_dict = sanitize_for_json(error_ai_data_dict)
+
+            return AIAnalysisData(**sanitized_error_ai_data_dict)

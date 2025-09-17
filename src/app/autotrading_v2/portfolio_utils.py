@@ -21,6 +21,9 @@ def calculate_net_profit(gross_profit_usdt: float, buy_fee: float, sell_fee: flo
 
 def calculate_break_even_price(avg_entry_price: float, fee_rate: float = 0.001) -> float:
     """수수료를 고려한 손익분기점 계산"""
+    if avg_entry_price <= 0 or fee_rate >= 1.0:
+        return 0.0
+
     # 매수 수수료를 포함한 실제 매수가격
     effective_buy_price = avg_entry_price * (1 + fee_rate)
     # 매도 수수료를 고려한 손익분기점
@@ -30,6 +33,8 @@ def calculate_break_even_price(avg_entry_price: float, fee_rate: float = 0.001) 
 
 def calculate_effective_sell_price(current_price: float, fee_rate: float = 0.001) -> float:
     """수수료를 고려한 실제 매도가격 계산"""
+    if current_price <= 0 or fee_rate >= 1.0:
+        return 0.0
     return round(current_price * (1 - fee_rate), 2)
 
 
@@ -166,6 +171,19 @@ def analyze_asset_with_fees(
 ) -> Dict[str, Any]:
     """자산별 수수료 포함 분석"""
 
+    # 입력값 검증 및 안전한 처리
+    if balance < 0 or current_price < 0 or (avg_entry_price is not None and avg_entry_price < 0):
+        return {
+            "asset": asset,
+            "balance": max(0.0, balance),
+            "current_price": max(0.0, current_price),
+            "current_value": 0.0,
+            "avg_entry_price": avg_entry_price,
+            "trading_fees": {"fee_rate": fee_rate, "estimated_buy_fee": 0.0, "estimated_sell_fee": 0.0, "total_fees": 0.0},
+            "profit_loss": {"gross_profit_usdt": 0.0, "net_profit_usdt": 0.0, "gross_profit_percentage": 0.0, "net_profit_percentage": 0.0, "fee_impact_usdt": 0.0, "break_even_price": None},
+            "sell_analysis": {"gross_sell_value": 0.0, "net_sell_value": 0.0, "effective_sell_price": 0.0, "is_profitable": False, "is_above_break_even": False, "profit_after_fees": 0.0}
+        }
+
     # 기본 정보
     current_value = balance * current_price
 
@@ -182,9 +200,13 @@ def analyze_asset_with_fees(
         gross_profit = current_value - original_buy_value
         net_profit = calculate_net_profit(gross_profit, buy_fee, sell_fee)
 
-        # 수익률 계산
-        gross_profit_percentage = (gross_profit / original_buy_value) * 100
-        net_profit_percentage = (net_profit / original_buy_value) * 100
+        # 수익률 계산 (0으로 나누기 방지)
+        if original_buy_value > 0:
+            gross_profit_percentage = (gross_profit / original_buy_value) * 100
+            net_profit_percentage = (net_profit / original_buy_value) * 100
+        else:
+            gross_profit_percentage = 0.0
+            net_profit_percentage = 0.0
 
         # 손익분기점
         break_even_price = calculate_break_even_price(avg_entry_price, fee_rate)
@@ -275,7 +297,7 @@ def analyze_portfolio_with_fees(
             total_fees += asset_analysis["trading_fees"]["total_fees"]
 
     # 전체 포트폴리오 분석
-    total_net_profit_percentage = (total_net_profit / total_value * 100) if total_value > 0 else 0
+    total_net_profit_percentage = (total_net_profit / total_value * 100) if total_value > 0 else 0.0
 
     return {
         "portfolio_summary": {
