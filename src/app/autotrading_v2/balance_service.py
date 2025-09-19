@@ -13,7 +13,7 @@ from src.common.utils.bitcoin.binace import BinanceUtils
 from src.common.utils.json_sanitizer import sanitize_for_json
 from src.app.autotrading_v2.models import (
     BalanceRequest, BalanceResponse, AssetBalance,
-    LastTradeInfo, RecentTradeInfo, AIAnalysisData
+    LastTradeInfo, RecentTradeInfo, AIAnalysisData, OpenPosition
 )
 from src.app.autotrading_v2.portfolio_utils import analyze_asset_with_fees
 
@@ -42,6 +42,20 @@ class BalanceService:
         try:
             logger.info(f"잔고 조회 시작: tickers={request.tickers}, include_zero={request.include_zero_balances}")
 
+            if not request.user_idx:
+                return BalanceResponse(
+                    status="error",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    balances=[],
+                    total_usdt_value=0.0,
+                    open_positions=None,
+                    requested_tickers=request.tickers,
+                    last_trade=None,
+                    recent_trades=None,
+                    ai_analysis_data=None,
+                    metadata={"error": "사용자 IDX가 필요합니다."}
+                )
+
             user_info = await self.user_service.get_user_exchange_by_user_idx(
                 user_idx=request.user_idx
             )
@@ -52,6 +66,7 @@ class BalanceService:
                     timestamp=datetime.now(timezone.utc).isoformat(),
                     balances=[],
                     total_usdt_value=0.0,
+                    open_positions=None,
                     requested_tickers=request.tickers,
                     last_trade=None,
                     recent_trades=None,
@@ -66,6 +81,7 @@ class BalanceService:
                     timestamp=datetime.now(timezone.utc).isoformat(),
                     balances=[],
                     total_usdt_value=0.0,
+                    open_positions=None,
                     requested_tickers=request.tickers,
                     last_trade=None,
                     recent_trades=None,
@@ -80,6 +96,7 @@ class BalanceService:
                     timestamp=datetime.now(timezone.utc).isoformat(),
                     balances=[],
                     total_usdt_value=0.0,
+                    open_positions=None,
                     requested_tickers=request.tickers,
                     last_trade=None,
                     recent_trades=None,
@@ -103,6 +120,7 @@ class BalanceService:
                         timestamp=datetime.now(timezone.utc).isoformat(),
                         balances=[],
                         total_usdt_value=0.0,
+                        open_positions=None,
                         requested_tickers=request.tickers,
                         last_trade=None,
                         recent_trades=None,
@@ -118,6 +136,7 @@ class BalanceService:
                     timestamp=datetime.now(timezone.utc).isoformat(),
                     balances=[],
                     total_usdt_value=0.0,
+                    open_positions=None,
                     requested_tickers=request.tickers,
                     last_trade=None,
                     recent_trades=None,
@@ -172,7 +191,7 @@ class BalanceService:
                             'enableRateLimit': True,
                         })
                         ticker = await run_in_threadpool(exchange.fetch_ticker, f"{asset}/USDT")
-                        price = float(ticker.get("last", 0))
+                        price = float(ticker.get("last", 0) or 0)
                         usdt_value = float(total) * price
                         total_usdt_value += usdt_value
                         logger.info(f"{asset} 가격: {price}, USDT 가치: {usdt_value}")
@@ -227,6 +246,9 @@ class BalanceService:
             # 요약 정보 생성
             summary = self._create_summary(balances, total_usdt_value, target_assets)
 
+            # 오픈 포지션 정보 생성
+            open_positions = self._create_open_positions(balances)
+
             # 거래 내역 조회 (요청된 경우만)
             last_trade = None
             recent_trades = None
@@ -246,6 +268,7 @@ class BalanceService:
 
             # JSON 직렬화를 위해 inf 값 변환
             sanitized_balances = sanitize_for_json(balances)
+            sanitized_open_positions = sanitize_for_json(open_positions)
             sanitized_last_trade = sanitize_for_json(last_trade)
             sanitized_recent_trades = sanitize_for_json(recent_trades)
             sanitized_ai_analysis_data = sanitize_for_json(ai_analysis_data)
@@ -256,6 +279,7 @@ class BalanceService:
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 balances=sanitized_balances,
                 total_usdt_value=total_usdt_value,
+                open_positions=sanitized_open_positions,
                 requested_tickers=target_assets,
                 last_trade=sanitized_last_trade,
                 recent_trades=sanitized_recent_trades,
@@ -275,12 +299,53 @@ class BalanceService:
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 balances=[],
                 total_usdt_value=0.0,
+                open_positions=None,
                 requested_tickers=request.tickers,
                 last_trade=None,
                 recent_trades=None,
                 ai_analysis_data=None,
                 metadata=sanitize_for_json(error_metadata)
             )
+
+    def _create_open_positions(self, balances: List[AssetBalance]) -> List[OpenPosition]:
+        """오픈 포지션 정보 생성"""
+        try:
+            open_positions = []
+
+            for balance in balances:
+                # USDT가 아니고, 총 잔고가 0보다 크며, USDT 가치가 있는 경우만 처리
+                if (balance.asset != "USDT" and
+                    balance.total > 0 and
+                    balance.usdt_value and
+                    balance.usdt_value > 0 and
+                    balance.avg_entry_price and
+                    balance.avg_entry_price > 0):
+
+                    # 현재 가격 계산 (USDT 가치 / 수량)
+                    current_price = balance.usdt_value / balance.total
+
+                    # 미실현 손익 계산
+                    unrealized_pnl_usdt = (current_price - balance.avg_entry_price) * balance.total
+                    unrealized_pnl_pct = ((current_price - balance.avg_entry_price) / balance.avg_entry_price) * 100
+
+                    open_position = OpenPosition(
+                        asset=balance.asset,
+                        quantity=balance.total,
+                        entry_price=balance.avg_entry_price,
+                        current_price=current_price,
+                        unrealized_pnl_pct=round(unrealized_pnl_pct, 2),
+                        unrealized_pnl_usdt=round(unrealized_pnl_usdt, 2),
+                        market_value=round(balance.usdt_value, 2)
+                    )
+
+                    open_positions.append(open_position)
+                    logger.info(f"오픈 포지션 생성: {balance.asset} - 진입가: {balance.avg_entry_price}, 현재가: {current_price}, 손익: {unrealized_pnl_pct:.2f}%")
+
+            return open_positions
+
+        except Exception as e:
+            logger.error(f"오픈 포지션 생성 실패: {e}")
+            return []
 
     def _create_summary(self, balances: List[AssetBalance], total_usdt_value: float, requested_tickers: Optional[List[str]]) -> Dict[str, Any]:
         """잔고 요약 정보 생성"""
@@ -398,7 +463,8 @@ class BalanceService:
                         logger.info(f"{market} 거래 내역 {len(trades)}개 조회됨")
 
                         for trade in trades:
-                            trade['market'] = market
+                            if isinstance(trade, dict):
+                                trade['market'] = market
                             all_trades.append(trade)
 
                     except Exception as e:

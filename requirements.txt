@@ -1,0 +1,48 @@
+# FastAPI 및 웹 프레임워크
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 데이터베이스
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Redis 및 Celery (백그라운드 작업)
+redis==5.0.1
+celery[redis]==5.3.4
+
+# 암호화폐 거래소 API
+ccxt==4.1.77
+
+# 기술적 분석
+TA-Lib==0.4.28
+numpy==1.24.3
+pandas==2.0.3
+
+# AI 및 분석
+openai==1.3.7
+langchain==0.0.350
+langchain-openai==0.0.2
+langchain-community==0.0.10
+yfinance==0.2.28
+
+# 데이터 처리
+scipy==1.11.4
+scikit-learn==1.3.2
+
+# 유틸리티
+python-dotenv==1.0.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# 로깅 및 모니터링
+structlog==23.2.0
+
+# HTTP 클라이언트
+httpx==0.25.2
+aiohttp==3.9.1
+
+# 기타
+pytz==2023.3

@@ -263,6 +263,17 @@ class RecentTradeInfo(BaseModel):
     fee_asset: str = Field(..., description="수수료 자산")
 
 
+class OpenPosition(BaseModel):
+    """오픈 포지션 모델"""
+    asset: str = Field(..., description="자산 심볼 (예: BTC, ETH)")
+    quantity: float = Field(..., description="보유 수량")
+    entry_price: float = Field(..., description="진입 가격")
+    current_price: float = Field(..., description="현재 가격")
+    unrealized_pnl_pct: float = Field(..., description="미실현 손익 비율 (%)")
+    unrealized_pnl_usdt: float = Field(..., description="미실현 손익 (USDT)")
+    market_value: float = Field(..., description="현재 시장 가치 (USDT)")
+
+
 class AIAnalysisData(BaseModel):
     """AI 분석용 거래 데이터 모델"""
     total_trades_count: int = Field(..., description="총 거래 횟수")
@@ -315,6 +326,9 @@ class BalanceResponse(BaseModel):
     # 잔고 정보
     balances: List[AssetBalance] = Field(..., description="자산별 잔고 목록")
     total_usdt_value: float = Field(..., description="총 USDT 기준 가치")
+
+    # 오픈 포지션 정보 (새로 추가)
+    open_positions: Optional[List[OpenPosition]] = Field(None, description="오픈 포지션 목록")
 
     # 요청된 티커 정보
     requested_tickers: Optional[List[str]] = Field(None, description="요청된 티커 목록")
