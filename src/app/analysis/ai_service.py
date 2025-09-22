@@ -253,6 +253,159 @@ CRITICAL RULES:
             logger.error(f"응답 내용: {response}")
             raise
 
+    async def analyze_multiple_coins_risk_with_ai(self, coins_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        여러 코인을 한 번에 AI로 리스크 분석 (비용 효율적)
+        """
+        try:
+            prompt = self._create_multi_coin_risk_analysis_prompt(coins_data)
+            messages = [
+                SystemMessage(content=self._get_multi_coin_risk_system_message()),
+                HumanMessage(content=prompt)
+            ]
+            response = await self.llm.ainvoke(messages)
+            result = self._parse_ai_response(response.content)
+            logger.info(f"✅ AI 다중 코인 리스크 분석 완료: {len(coins_data)}개 코인")
+            return result
+        except Exception as e:
+            logger.error(f"❌ AI 다중 코인 리스크 분석 실패: {str(e)}")
+            return self._create_fallback_multi_risk_analysis(coins_data)
+
+    def _create_multi_coin_risk_analysis_prompt(self, coins_data: List[Dict[str, Any]]) -> str:
+        """다중 코인 AI 리스크 분석 프롬프트 생성"""
+        coins_summary = []
+        for coin_data in coins_data:
+            coin_summary = {
+                "market": coin_data.get('market', 'Unknown'),
+                "analysis_type": coin_data.get('analysis_type', 'daily'),
+                "days_back": coin_data.get('days_back', 90),
+                "personality": coin_data.get('personality', 'conservative'),
+                "risk_score": coin_data.get('risk_score', 0),
+                "risk_level": coin_data.get('risk_level', 'UNKNOWN'),
+                "risk_off_signal": coin_data.get('risk_off_signal', False),
+                "confidence": coin_data.get('confidence', 0.5)
+            }
+            coins_summary.append(coin_summary)
+
+        prompt = f"""
+Mission: Analyze multiple cryptocurrency risk profiles and generate structured, purely analytical JSON reports for each coin. Your role is to provide objective risk scores based on data, not trading recommendations.
+
+Coins Data ({len(coins_summary)} coins):
+{json.dumps(coins_summary, indent=2)}
+
+Analysis Instructions:
+1. For each coin, determine the risk level based on risk_score and other indicators
+2. Provide evidence including risk indicators and market conditions
+3. Calculate confidence based on data quality and consistency
+4. Consider the personality type (conservative, aggressive, etc.)
+
+CRITICAL RULES:
+1. Your response MUST be ONLY the valid JSON object.
+2. Do NOT include trading recommendations.
+3. Each coin's risk_level field MUST be one of: "LOW", "MEDIUM", "HIGH", "CRITICAL".
+4. risk_score should be between 0 and 100 for each coin.
+5. Analyze all {len(coins_summary)} coins in a single response.
+
+Output Format:
+{{
+  "analysis_results": {{
+    "BTC/USDT": {{
+      "risk_result": {{
+        "agent_name": "AXIS-Risk",
+        "risk_score": 45.5,
+        "risk_level": "MEDIUM",
+        "normalized_risk_score": 0.09,
+        "evidence": {{
+          "analysis_period": "90 days",
+          "vix_index": 21.5,
+          "correlation_btc_ndx": 0.65,
+          "confidence": 0.8
+        }}
+      }}
+    }},
+    "ETH/USDT": {{
+      "risk_result": {{
+        "agent_name": "AXIS-Risk",
+        "risk_score": 32.1,
+        "risk_level": "LOW",
+        "normalized_risk_score": -0.36,
+        "evidence": {{
+          "analysis_period": "90 days",
+          "vix_index": 18.2,
+          "correlation_btc_ndx": 0.72,
+          "confidence": 0.75
+        }}
+      }}
+    }}
+  }},
+  "summary": {{
+    "total_coins": {len(coins_summary)},
+    "low_risk_coins": 0,
+    "medium_risk_coins": 0,
+    "high_risk_coins": 0,
+    "critical_risk_coins": 0,
+    "average_risk_score": 0.0
+  }}
+}}
+"""
+        return prompt
+
+    def _get_multi_coin_risk_system_message(self) -> str:
+        """다중 코인 리스크 분석용 시스템 메시지"""
+        return """You are a JSON-only data generation AI specialized in multi-coin cryptocurrency risk analysis. Your ONLY purpose is to analyze multiple coins and respond with a valid JSON object.
+
+CRITICAL RULES:
+- Your response MUST be ONLY the valid JSON object.
+- Your response MUST start with { and end with }.
+- DO NOT include ANY text, explanations, apologies, or markdown formatting.
+- Analyze ALL provided coins in a single response.
+- Adhere strictly to the JSON format. Use double quotes for all keys and string values."""
+
+    def _create_fallback_multi_risk_analysis(self, coins_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """AI 리스크 분석 실패시 기본 분석 결과 (다중 코인용)"""
+        analysis_results = {}
+
+        for coin_data in coins_data:
+            market = coin_data.get('market', 'Unknown')
+            risk_score = coin_data.get('risk_score', 50)
+            risk_level = self._determine_risk_level(risk_score)
+
+            analysis_results[market] = {
+                "risk_result": {
+                    "agent_name": "AXIS-Risk-Fallback",
+                    "risk_score": risk_score,
+                    "risk_level": risk_level,
+                    "normalized_risk_score": (risk_score - 50) / 50,  # -1 to +1
+                    "evidence": {
+                        "analysis_period": f"{coin_data.get('days_back', 90)} days",
+                        "confidence": coin_data.get('confidence', 0.5)
+                    }
+                }
+            }
+
+        return {
+            "analysis_results": analysis_results,
+            "summary": {
+                "total_coins": len(coins_data),
+                "low_risk_coins": sum(1 for coin in coins_data if self._determine_risk_level(coin.get('risk_score', 50)) == "LOW"),
+                "medium_risk_coins": sum(1 for coin in coins_data if self._determine_risk_level(coin.get('risk_score', 50)) == "MEDIUM"),
+                "high_risk_coins": sum(1 for coin in coins_data if self._determine_risk_level(coin.get('risk_score', 50)) == "HIGH"),
+                "critical_risk_coins": sum(1 for coin in coins_data if self._determine_risk_level(coin.get('risk_score', 50)) == "CRITICAL"),
+                "average_risk_score": sum(coin.get('risk_score', 50) for coin in coins_data) / len(coins_data)
+            }
+        }
+
+    def _determine_risk_level(self, risk_score: float) -> str:
+        """리스크 점수에 따른 리스크 레벨 결정"""
+        if risk_score >= 80:
+            return "CRITICAL"
+        elif risk_score >= 60:
+            return "HIGH"
+        elif risk_score >= 40:
+            return "MEDIUM"
+        else:
+            return "LOW"
+
     def _create_fallback_multi_analysis(self, coins_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """AI 분석 실패시 기본 분석 결과 (다중 코인용)"""
         analysis_results = {}
