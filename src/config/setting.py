@@ -42,14 +42,14 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: Final[int] = getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', 30)
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: Final[int] = getenv('JWT_REFRESH_TOKEN_EXPIRE_DAYS', 7)
 
-    # 데이터베이스 설정 (기존 코드 호환성을 위해)
+    # 데이터베이스 설정 (PoolCreate 클래스와 호환되도록 수정)
     @property
     def DATABASES(self):
         return {
             "DATABASE": {
                 "default": {
                     "DB_HOST": getenv("POSTGRESQL_DB_HOST", "localhost"),
-                    "DB_PORT": getenv("POSTGRESQL_DB_PORT", "5432"),
+                    "DB_PORT": int(getenv("POSTGRESQL_DB_PORT", "5432")),
                     "DB_NAME": getenv("POSTGRESQL_DB_DATABASE", "autotrading"),
                     "DB_USER": getenv("POSTGRESQL_DB_USER", "devjun"),
                     "DB_PASSWORD": getenv("POSTGRESQL_DB_PASSWORD", "X7pQa9Lm!"),

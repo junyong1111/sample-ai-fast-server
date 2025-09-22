@@ -64,6 +64,23 @@ services:
       retries: 5
       start_period: 10s
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks: [appnet]
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   appnet:
     driver: bridge
@@ -71,3 +88,4 @@ networks:
 volumes:
   n8n_data:
   postgresql_data:
+  redis_data:

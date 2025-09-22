@@ -18,6 +18,8 @@ from .models import (
     TradeExecutionRequest, TradeExecutionResponse,
     TradeExecutionDataResponse, TradeExecutionListResponse
 )
+from src.scheduler.tasks.chart_analysis_task.func import ChartAnalysisFunc
+from src.common.utils.logger import set_logger
 
 # 라우터 생성
 router = APIRouter()
@@ -27,6 +29,17 @@ quantitative_service = QuantitativeServiceV2()
 risk_service = None  # 지연 초기화
 balance_service = BalanceService()
 trading_service = TradingService()
+
+# 캐시 기반 분석 서비스
+chart_analysis_func = None
+logger = set_logger("autotrading_v2_router")
+
+def get_chart_analysis_func():
+    """ChartAnalysisFunc 싱글톤 인스턴스 반환"""
+    global chart_analysis_func
+    if chart_analysis_func is None:
+        chart_analysis_func = ChartAnalysisFunc(logger)
+    return chart_analysis_func
 
 def get_risk_service():
     """리스크 분석 서비스 지연 초기화"""
@@ -75,6 +88,153 @@ async def analyze_quantitative_indicators(
         raise HTTPException(
             status_code=500,
             detail=f"정량지표 분석 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/quantitative/analyze/cached",
+    tags=["Autotrading-Quantitative"],
+    response_model=QuantitativeResponse,
+    summary="정량지표 분석 (캐시 기반)",
+    description="캐시된 분석 결과를 우선 조회하고, 없으면 실시간 분석을 수행합니다."
+)
+async def analyze_quantitative_indicators_cached(
+    market: str = Query(..., description="거래 마켓 (예: BTC/USDT)"),
+    timeframe: str = Query("minutes:60", description="시간프레임"),
+    count: int = Query(200, description="캔들 개수"),
+    exchange: str = Query("binance", description="거래소"),
+    force_refresh: bool = Query(False, description="캐시 무시하고 강제 새로고침")
+):
+    """
+    정량지표 분석 실행 (캐시 기반)
+
+    캐시된 분석 결과가 있으면 즉시 반환하고, 없으면 실시간 분석을 수행합니다.
+    """
+    try:
+        logger.info(f"🔍 [캐시] 정량지표 분석 요청: {market} | {timeframe} | {count}개 | 강제새로고침: {force_refresh}")
+
+        # Function 인스턴스 가져오기
+        func = get_chart_analysis_func()
+
+        # 캐시 확인 (강제 새로고침이 아닌 경우)
+        if not force_refresh:
+            cached_result = await func.get_latest_analysis(market)
+            if cached_result:
+                logger.info(f"✅ [캐시] 캐시된 결과 반환: {market}")
+                return QuantitativeResponse(**cached_result.get('full_report', {}))
+
+        # 캐시가 없거나 강제 새로고침인 경우 실시간 분석
+        logger.info(f"🚀 [실시간] 분석 실행: {market}")
+        result = await quantitative_service.analyze_market(
+            market=market,
+            timeframe=timeframe,
+            count=count,
+            exchange=exchange,
+        )
+
+        # 결과를 캐시에 저장 (비동기로 실행)
+        import asyncio
+        asyncio.create_task(func.save_analysis_result(market, result, "api_request"))
+
+        return QuantitativeResponse(**result)
+
+    except Exception as e:
+        logger.error(f"❌ [캐시] 정량지표 분석 실패: {market} - {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"정량지표 분석 실패: {str(e)}"
+        )
+
+
+@router.get(
+    "/quantitative/analyze/all",
+    tags=["Autotrading-Quantitative"],
+    summary="모든 코인 정량지표 분석 조회 (캐시 기반)",
+    description="캐시된 모든 코인의 분석 결과를 조회합니다."
+)
+async def get_all_quantitative_analyses():
+    """
+    모든 코인의 정량지표 분석 결과 조회 (캐시 기반)
+    """
+    try:
+        logger.info("🔍 [캐시] 모든 코인 분석 결과 조회 요청")
+
+        # Function 인스턴스 가져오기
+        func = get_chart_analysis_func()
+
+        # 모든 캐시된 분석 결과 조회
+        cached_results = await func.get_all_latest_analyses()
+
+        # 결과 포맷팅
+        formatted_results = []
+        for result in cached_results:
+            formatted_results.append({
+                'asset_symbol': result.get('asset_symbol'),
+                'quant_score': result.get('quant_score'),
+                'social_score': result.get('social_score'),
+                'risk_score': result.get('risk_score'),
+                'overall_score': result.get('overall_score'),
+                'market_regime': result.get('market_regime'),
+                'analyst_summary': result.get('analyst_summary'),
+                'status': result.get('status'),
+                'created_at': result.get('created_at'),
+                'expires_at': result.get('expires_at'),
+                'full_report': result.get('full_report')
+            })
+
+        logger.info(f"✅ [캐시] {len(formatted_results)}개 코인 분석 결과 반환")
+        return {
+            'status': 'success',
+            'total_count': len(formatted_results),
+            'results': formatted_results,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ [캐시] 모든 코인 분석 결과 조회 실패: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"모든 코인 분석 결과 조회 실패: {str(e)}"
+        )
+
+
+@router.post(
+    "/quantitative/analyze/trigger",
+    tags=["Autotrading-Quantitative"],
+    summary="알트코인 분석 트리거",
+    description="특정 알트코인에 대한 즉시 분석을 트리거합니다."
+)
+async def trigger_altcoin_analysis(
+    market: str = Query(..., description="거래 마켓 (예: DOGE/USDT)"),
+    timeframe: str = Query("minutes:60", description="시간프레임"),
+    count: int = Query(200, description="캔들 개수"),
+    exchange: str = Query("binance", description="거래소")
+):
+    """
+    알트코인 분석 트리거
+
+    특정 알트코인에 대한 즉시 분석을 트리거하고 결과를 반환합니다.
+    """
+    try:
+        logger.info(f"🔄 [트리거] 알트코인 분석 트리거: {market}")
+
+        # Celery 태스크 트리거
+        from src.scheduler.tasks.chart_analysis_task import trigger_altcoin_analysis
+        task_result = trigger_altcoin_analysis.delay(market, timeframe, count, exchange)
+
+        return {
+            'status': 'success',
+            'market': market,
+            'task_id': task_result.id,
+            'message': f'{market} 알트코인 분석이 시작되었습니다.',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"❌ [트리거] 알트코인 분석 트리거 실패: {market} - {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"알트코인 분석 트리거 실패: {str(e)}"
         )
 
 
