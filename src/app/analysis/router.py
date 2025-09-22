@@ -10,6 +10,7 @@ import json
 
 from src.common.utils.logger import set_logger
 from src.app.analysis.service import AnalysisService
+from src.app.analysis.ai_service import AIAnalysisService
 
 logger = set_logger(__name__)
 router = APIRouter(tags=["Analysis"])
@@ -184,3 +185,92 @@ async def get_risk_analysis(
             status_code=500,
             detail=f"리스크 분석 조회 실패: {str(e)}"
         )
+
+@router.post(
+    "/ai/chart",
+    summary="AI 차트 분석",
+    description="LangChain을 사용한 AI 기반 차트 분석을 수행합니다."
+)
+async def analyze_chart_with_ai(
+    tickers: str = Query("BTC/USDT,ETH/USDT", description="분석할 티커 목록 (콤마로 구분)"),
+    timeframe: str = Query("minutes:60", description="시간 프레임 (예: minutes:60)"),
+    count: int = Query(200, ge=50, le=1000, description="캔들 개수"),
+    exchange: str = Query("binance", description="거래소")
+):
+    """
+    AI 기반 차트 분석
+
+    LangChain과 OpenAI를 사용하여 차트 데이터를 분석하고
+    시장 레짐을 판단하여 정량적 점수를 제공합니다.
+    """
+    try:
+        # 티커 목록 파싱
+        ticker_list = [t.strip() for t in tickers.split(',') if t.strip()]
+        logger.info(f"🤖 AI 차트 분석 요청: {len(ticker_list)}개 티커")
+
+        # AI 분석 서비스 초기화
+        ai_service = AIAnalysisService()
+        analysis_service = AnalysisService()
+
+        results = []
+
+        # 1. 모든 코인의 차트 데이터 수집
+        coins_data = []
+        for ticker in ticker_list:
+            try:
+                chart_data = await analysis_service.get_chart_data_for_ai(
+                    market=ticker,
+                    timeframe=timeframe,
+                    count=count,
+                    exchange=exchange
+                )
+                coins_data.append(chart_data)
+                logger.info(f"✅ {ticker} 차트 데이터 수집 완료")
+            except Exception as e:
+                logger.error(f"❌ {ticker} 차트 데이터 수집 실패: {str(e)}")
+
+        # 2. 다중 코인 AI 분석 실행 (비용 효율적)
+        if coins_data:
+            try:
+                ai_results = await ai_service.analyze_multiple_coins_with_ai(coins_data)
+
+                # 3. 결과 정리
+                analysis_results = ai_results.get('analysis_results', {})
+                for coin_data in coins_data:
+                    market = coin_data.get('market', 'Unknown')
+                    result = {
+                        "ticker": market,
+                        "ai_analysis": analysis_results.get(market, None),
+                        "raw_data": coin_data
+                    }
+                    results.append(result)
+
+                logger.info(f"✅ 다중 코인 AI 분석 완료: {len(coins_data)}개 코인")
+
+            except Exception as e:
+                logger.error(f"❌ 다중 코인 AI 분석 실패: {str(e)}")
+                # 실패시 기본 결과
+                for coin_data in coins_data:
+                    results.append({
+                        "ticker": coin_data.get('market', 'Unknown'),
+                        "ai_analysis": None,
+                        "error": str(e)
+                    })
+        else:
+            logger.error("❌ 수집된 차트 데이터가 없습니다")
+
+        return {
+            "status": "success",
+            "data": results,
+            "message": f"AI 차트 분석 완료: {len(results)}개 티커",
+            "query": {
+                "tickers": ticker_list,
+                "timeframe": timeframe,
+                "count": count,
+                "exchange": exchange
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"❌ AI 차트 분석 API 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI 차트 분석 실패: {str(e)}")

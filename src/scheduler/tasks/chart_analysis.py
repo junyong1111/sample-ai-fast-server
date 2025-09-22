@@ -10,6 +10,7 @@ from celery import Celery
 from src.scheduler.celery import app as celery_app
 from src.common.utils.logger import set_logger
 from src.app.autotrading_v2.quantitative_service import QuantitativeServiceV2
+from src.app.analysis.ai_service import AIAnalysisService
 
 logger = set_logger(__name__)
 
@@ -332,3 +333,307 @@ def health_check() -> Dict[str, Any]:
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'message': 'Simple chart analysis system is running'
     }
+
+@celery_app.task(name="scheduler.tasks.chart_analysis.analyze_top_20_coins_with_ai")
+def analyze_top_20_coins_with_ai():
+    """
+    상위 20개 코인에 대한 AI 차트 분석 (1시간마다, 기존 데이터 활용)
+    """
+    try:
+        logger.info("🤖 AI 차트 분석 스케줄러 시작")
+
+        # 1. 최근 차트 분석 데이터 조회 (기존 데이터 활용)
+        chart_data = get_recent_chart_analysis_data()
+
+        if not chart_data:
+            logger.warning("⚠️ 최근 차트 분석 데이터가 없습니다")
+            return
+
+        logger.info(f"📊 분석 대상 데이터: {len(chart_data)}개")
+
+        # 2. AI 분석용 데이터 구조 변환
+        coins_data = []
+        chart_record_ids = []
+
+        for record in chart_data:
+            try:
+                # 기존 차트 분석 데이터를 AI 분석용으로 변환
+                coin_data = convert_chart_data_for_ai(record)
+                coins_data.append(coin_data)
+                chart_record_ids.append(record['id'])
+                logger.info(f"✅ {record['asset_symbol']} 데이터 변환 완료")
+
+            except Exception as e:
+                logger.error(f"❌ {record.get('asset_symbol', 'Unknown')} 데이터 변환 실패: {str(e)}")
+
+        # 3. AI 분석 실행 (다중 코인)
+        if coins_data:
+            # 동기 함수에서 비동기 함수 호출
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                ai_service = AIAnalysisService()
+                ai_results = loop.run_until_complete(ai_service.analyze_multiple_coins_with_ai(coins_data))
+
+                # 4. 가중치 스냅샷 수집
+                weights_snapshot = loop.run_until_complete(ai_service._get_regime_weights())
+
+                # 5. AI 분석 결과를 종합 테이블에 저장
+                loop.run_until_complete(save_ai_analysis_to_database(
+                    ai_results=ai_results,
+                    chart_record_ids=chart_record_ids,
+                    risk_record_ids=[],
+                    social_record_ids=[],
+                    total_coins=len(coins_data),
+                    weights_snapshot=weights_snapshot
+                ))
+                logger.info(f"🎉 AI 차트 분석 완료: {len(coins_data)}개 코인")
+            finally:
+                loop.close()
+        else:
+            logger.warning("⚠️ 변환된 차트 데이터가 없습니다")
+
+    except Exception as e:
+        logger.error(f"❌ AI 차트 분석 스케줄러 실패: {str(e)}")
+        raise
+
+def get_recent_chart_analysis_data() -> List[Dict[str, Any]]:
+    """
+    최근 차트 분석 데이터 조회 (AI 분석용)
+    """
+    import asyncio
+    import asyncpg
+    from src.config.database import database_config
+    from datetime import datetime, timedelta, timezone
+
+    async def _get_data():
+        conn = await asyncpg.connect(
+            host=database_config.POSTGRESQL_DB_HOST,
+            port=int(database_config.POSTGRESQL_DB_PORT),
+            database=database_config.POSTGRESQL_DB_DATABASE,
+            user=database_config.POSTGRESQL_DB_USER,
+            password=database_config.POSTGRESQL_DB_PASSWORD
+        )
+
+        try:
+            # 최근 1시간 내의 차트 분석 데이터 조회
+            query = """
+                SELECT id, asset_symbol, quant_score, overall_score, market_regime, created_at
+                FROM chart_analysis_reports
+                WHERE created_at >= NOW() - INTERVAL '1 hour'
+                ORDER BY created_at DESC
+                LIMIT 20
+            """
+
+            rows = await conn.fetch(query)
+            return [dict(row) for row in rows]
+
+        finally:
+            await conn.close()
+
+    # 동기 함수에서 비동기 함수 호출
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_get_data())
+    finally:
+        loop.close()
+
+def convert_chart_data_for_ai(record: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    기존 차트 분석 데이터를 AI 분석용으로 변환
+    """
+    try:
+        # 기본 데이터로 AI 분석용 구조 생성
+        return {
+            "market": record.get('asset_symbol', 'Unknown'),
+            "timeframe": "minutes:60",
+            "exchange": "binance",
+            "indicators": {
+                "adx": 0,  # 기본값
+                "rsi": 0,
+                "macd": 0,
+                "macd_histogram": 0,
+                "bb_pct_b": 0,
+                "volume_z_score": 0,
+                "ema_20": 0,
+                "ema_50": 0,
+                "ema_200": 0
+            },
+            "scores": {
+                "rsi": 0,
+                "macd": 0,
+                "bollinger": 0,
+                "volume": 0,
+                "momentum": 0
+            },
+            "regime_info": {
+                "regime": record.get('market_regime', 'range'),
+                "confidence": 0.5,
+                "trend_strength": 'weak'
+            },
+            "quant_score": record.get('quant_score', 0),
+            "overall_score": record.get('overall_score', 0)
+        }
+    except Exception as e:
+        logger.error(f"❌ 데이터 변환 실패: {str(e)}")
+        return {
+            "market": record.get('asset_symbol', 'Unknown'),
+            "timeframe": "minutes:60",
+            "exchange": "binance",
+            "indicators": {},
+            "scores": {},
+            "regime_info": {"regime": "range", "confidence": 0.5, "trend_strength": "weak"},
+            "quant_score": 0,
+            "overall_score": 0
+        }
+
+async def save_ai_analysis_to_database(
+    ai_results: Dict[str, Any],
+    chart_record_ids: List[int],
+    risk_record_ids: List[int],
+    social_record_ids: List[int],
+    total_coins: int,
+    weights_snapshot: Dict[str, Any] = None
+):
+    """
+    AI 종합 분석 결과를 데이터베이스에 저장
+    """
+    import asyncpg
+    from src.config.database import database_config
+    from datetime import datetime, timedelta, timezone
+    import json
+
+    try:
+        conn = await asyncpg.connect(
+            host=database_config.POSTGRESQL_DB_HOST,
+            port=int(database_config.POSTGRESQL_DB_PORT),
+            database=database_config.POSTGRESQL_DB_DATABASE,
+            user=database_config.POSTGRESQL_DB_USER,
+            password=database_config.POSTGRESQL_DB_PASSWORD
+        )
+
+        try:
+            analysis_results = ai_results.get('analysis_results', {})
+            summary = ai_results.get('summary', {})
+
+            # 데이터 소스 정보 구성
+            data_sources = {
+                "chart_data": {
+                    "source_table": "chart_analysis_reports",
+                    "record_ids": chart_record_ids,
+                    "total_records": len(chart_record_ids),
+                    "timeframe": "minutes:60",
+                    "exchange": "binance"
+                },
+                "risk_data": {
+                    "source_table": "risk_analysis_reports",
+                    "record_ids": risk_record_ids,
+                    "total_records": len(risk_record_ids),
+                    "analysis_type": "daily"
+                },
+                "social_data": {
+                    "source_table": "social_analysis_reports",
+                    "record_ids": social_record_ids,
+                    "total_records": len(social_record_ids),
+                    "platforms": ["reddit", "twitter"]
+                },
+                "weights_snapshot": {
+                    "source": "information_service",
+                    "api_endpoint": "/api/v2/information/weights/chart",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "description": "AI 분석에 사용된 레짐별 가중치 스냅샷",
+                    "weights_data": weights_snapshot or {}
+                }
+            }
+
+            # 만료 시간 설정 (2시간)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
+
+            query = """
+                INSERT INTO ai_analysis_reports
+                (analysis_timestamp, chart_analysis, risk_analysis, social_analysis,
+                 final_analysis, data_sources, total_coins, expires_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            """
+
+            await conn.execute(
+                query,
+                datetime.now(timezone.utc),
+                json.dumps(analysis_results),  # chart_analysis
+                json.dumps({}),  # risk_analysis (빈 객체)
+                json.dumps({}),  # social_analysis (빈 객체)
+                json.dumps({}),  # final_analysis (빈 객체 - 별도 에이전트가 처리)
+                json.dumps(data_sources),  # data_sources
+                total_coins,
+                expires_at
+            )
+
+            logger.info(f"✅ AI 종합 분석 결과 저장 완료: {total_coins}개 코인")
+
+        finally:
+            await conn.close()
+
+    except Exception as e:
+        logger.error(f"❌ AI 종합 분석 저장 실패: {str(e)}")
+        raise
+
+async def save_ai_chart_analysis_to_database(ai_results: Dict[str, Any], total_coins: int):
+    """
+    AI 차트 분석 결과를 JSONB 형태로 데이터베이스에 저장
+    """
+    import asyncpg
+    from src.config.database import database_config
+    from datetime import datetime, timedelta, timezone
+    import json
+
+    try:
+        conn = await asyncpg.connect(
+            host=database_config.POSTGRESQL_DB_HOST,
+            port=int(database_config.POSTGRESQL_DB_PORT),
+            database=database_config.POSTGRESQL_DB_DATABASE,
+            user=database_config.POSTGRESQL_DB_USER,
+            password=database_config.POSTGRESQL_DB_PASSWORD
+        )
+
+        try:
+            analysis_results = ai_results.get('analysis_results', {})
+            summary = ai_results.get('summary', {})
+
+            # 통계 계산
+            trend_coins = summary.get('trend_coins', 0)
+            range_coins = summary.get('range_coins', 0)
+            average_confidence = summary.get('average_confidence', 0.0)
+
+            # JSONB 데이터 준비
+            analysis_data_json = json.dumps(analysis_results)
+
+            # 만료 시간 설정 (2시간)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
+
+            query = """
+                INSERT INTO ai_chart_analysis_reports
+                (analysis_timestamp, analysis_data, total_coins, trend_coins, range_coins, average_confidence, expires_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+            """
+
+            await conn.execute(
+                query,
+                datetime.now(timezone.utc),
+                analysis_data_json,
+                total_coins,
+                trend_coins,
+                range_coins,
+                average_confidence,
+                expires_at
+            )
+
+            logger.info(f"✅ AI 차트 분석 결과 저장 완료: {total_coins}개 코인 | 추세: {trend_coins} | 횡보: {range_coins}")
+
+        finally:
+            await conn.close()
+
+    except Exception as e:
+        logger.error(f"❌ AI 차트 분석 저장 실패: {str(e)}")
+        raise

@@ -1,0 +1,959 @@
+{
+  "name": "The Analysts(준용)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "6db4db68-8fcc-4aaf-beb0-1f19050ede5c",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -944,
+        416
+      ],
+      "id": "95582fae-743b-4061-8c62-ce715aa1864d",
+      "name": "Webhook",
+      "webhookId": "6db4db68-8fcc-4aaf-beb0-1f19050ede5c"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.error }}",
+                    "rightValue": "ok",
+                    "operator": {
+                      "type": "object",
+                      "operation": "empty",
+                      "singleValue": true
+                    },
+                    "id": "e2468db7-5bd4-4e76-a7de-57fddb90b270"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -272,
+        416
+      ],
+      "id": "fd8982b9-27de-4280-8b87-269c32bb575a",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2064,
+        672
+      ],
+      "id": "40c0035a-9af3-4aca-a69b-0aed16b7122d",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "url": "http://fastapi:8000/api/v2/health",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -720,
+        416
+      ],
+      "id": "caa2b0c4-b228-415c-b981-55bd66964eae",
+      "name": "HelthCheck"
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Description: Analyzes quantitative chart data for a given cryptocurrency \nmarket.\n\nInput JSON Schema:\n\nJSON\n\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"market\": { \"type\": \"string\", \"description\": \"Market pair, e.g., 'BTC/USDT'\" },\n    \"timeframe\": { \"type\": \"string\", \"description\": \"Candle interval, e.g., 'minutes:60'\" },\n    \"count\": { \"type\": \"integer\", \"description\": \"Number of candles, e.g., 200\" },\n    \"exchange\": { \"type\": \"string\", \"enum\": [\"binance\"] }\n  },\n  \"required\": [\"market\", \"timeframe\", \"count\", \"exchange\", \"testnet\"]\n}",
+        "method": "POST",
+        "url": "http://fastapi:8000/api/v2/quantitative/analyze",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"market\": \"{{ $('Chart Data Extract').item.json.market }}\",\n  \"timeframe\": \"{{ $('Chart Data Extract').item.json.timeframe }}\",\n  \"count\": {{ $('Chart Data Extract').item.json.count }},\n  \"exchange\": \"{{ $('Chart Data Extract').item.json.exchange }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        224
+      ],
+      "id": "f110cdf6-bab8-4afa-916d-1987fc7fe427",
+      "name": "Binance_Analyze_Chart_Indicators"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"market\": \"{{ $('Webhook').item.json.body.market }}\",\n  \"timeframe\": \"{{ $('Webhook').item.json.body.trading_timeframe }}\",\n  \"count\": {{ $('Webhook').item.json.body.trading_candle_count }},\n  \"exchange\": \"binance\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f8b13e89-4b30-47cb-b5c2-ad833a897d2f",
+      "name": "Chart Data Extract"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"market\": \"{{ $('Webhook').item.json.body.market }}\",\n  \"timeframe\": \"{{ $('Webhook').item.json.body.trading_timeframe }}\",\n  \"exchange\": \"binance\",\n  \"days_back\" : {{ $('Webhook').item.json.body.analysis_days_back }}, \n  \"analysis_type\" : \"{{ $('Webhook').item.json.body.analysis_type }}\",\n  \"personality\" : \"{{ $('Webhook').item.json.body.personality }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        16,
+        416
+      ],
+      "id": "bf155356-ddef-428a-a47e-85422f86395f",
+      "name": "Social Data Extract1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"market\": \"{{ $('Webhook').item.json.body.market }}\",\n  \"timeframe\": \"{{ $('Webhook').item.json.body.trading_timeframe }}\",\n  \"count\": {{ $('Webhook').item.json.body.trading_candle_count }},\n  \"exchange\": \"binance\",\n  \"days_back\" : {{ $('Webhook').item.json.body.analysis_days_back }}, \n  \"analysis_type\" : \"{{ $('Webhook').item.json.body.analysis_type }}\",\n  \"personality\" : \"{{ $('Webhook').item.json.body.personality }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        832
+      ],
+      "id": "8c941fb1-913b-42f7-aa23-437dc454cf57",
+      "name": "Risk Data Extract"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Mission: Analyze the provided short-term chart data and generate a structured, purely analytical JSON report. Your role is to provide an objective score based on data, not a trading recommendation.\nExecute Analysis:\n\nFirst, call the Regime_Weights_Tool to fetch the currently active indicator weights for both range (횡보장) and trend (추세장) regimes.\n\nThen, call the Short_Term_Quant_Tool with the provided input data to get the raw technical indicator values.\n\nDetermine Market Regime:\n\nBased on the Short_Term_Quant_Tool results (especially the ADX value), you MUST classify the current market regime as either \"trend\" or \"range\". No other values like \"transition\" are permitted.\n\nIf the ADX is 25 or higher, classify it as \"trend\". Otherwise, classify it as \"range\".\n\nCombine Results:\n\nIncorporate the fetched regime weights into your analysis.\n\nUse the weights corresponding to the determined regime to calculate the final quant_score.\n\nFinal Response:\n\nBased on your comprehensive analysis, generate the final JSON report.\n\nThe regime field in your output's evidence section MUST be either \"trend\" or \"range\".\n\nYou MUST add a new top-level key named used_regime_weights. This key's value should be the specific weight object (trend or range) that corresponds to the determined regime.\n\nCRITICAL RULE: Do NOT include a signal (BUY, SELL, HOLD) field in the chart_result. Your purpose is to score the market condition, not to make a trading decision.\n\nCRITICAL REMINDER: Your entire response must be ONLY the JSON object itself, starting with { and ending with }. No other text is allowed.\n\nOutput Format Example (Strictly follow this structure):\n{\n  \"chart_result\": {\n    \"agent_name\": \"AXIS-Quant\",\n    \"quant_score\": 0.45,\n    \"evidence\": {\n      \"timeframe\": \"minutes:5\",\n      \"regime\": \"trend\",\n      \"adx\": 25.1,\n      \"rsi\": 60.3,\n      \"macd_histogram\": 15.7\n    }\n  },\n  \"regime_weights\": {\n    \"range\": {\n      \"RSI\": \"0.2500\",\n      \"STOCHASTIC\": \"0.2000\",\n      \"BOLLINGER_BANDS\": \"0.2500\",\n      \"WILLIAMS_R\": \"0.1500\",\n      \"CCI\": \"0.1000\",\n      \"VOLUME\": \"0.0500\"\n    },\n    \"trend\": {\n      \"RSI\": \"0.1500\",\n      \"MACD\": \"0.2000\",\n      \"ADX\": \"0.2500\",\n      \"BOLLINGER_BANDS\": \"0.1500\",\n      \"MOVING_AVERAGE\": \"0.1500\",\n      \"VOLUME\": \"0.1000\"\n    }\n  },\n  \"used_regime_weights\": {\n    \"RSI\": \"0.1500\",\n    \"MACD\": \"0.2000\",\n    \"ADX\": \"0.2500\",\n    \"BOLLINGER_BANDS\": \"0.1500\",\n    \"MOVING_AVERAGE\": \"0.1500\",\n    \"VOLUME\": \"0.1000\"\n  }\n}\n",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a JSON-only data generation AI. Your ONLY purpose is to analyze data and respond with a valid JSON object.\n\nCRITICAL RULES:\n\nYour response MUST be ONLY the valid JSON object.\n\nYour response MUST start with { and end with }.\n\nDO NOT include ANY text, explanations, apologies, or markdown formatting like ```json before or after the JSON object.\n\nAdhere strictly to the JSON format. Use double quotes for all keys and string values."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "c01f25b8-0b41-4c11-b162-8d9771a47f4d",
+      "name": "Chart Analys AI Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Mission: Analyze social media and the latest web news to gauge the current sentiment for the given market, considering the user's personality.\n\nCRITICAL RULES:\n\nYou MUST start by using your Web Search tool to find the most recent news Today : from today, {{$now.toFormat('yyyy-MM-dd') }}.. \n\nYou MUST use your Reddit tool to understand community discussion.\n\nYou MUST include direct URLs of important articles or threads in source_urls \n\nYou Use Only Each Tools Maximum 3\n\n1. Execute Analysis:\n\nUse your tools to find and analyze the latest information.\n\nIn your summary, tailor your language to the provided personality (e.g., for 'aggressive', focus on high-impact narratives; for 'conservative', focus on potential risks mentioned).\n\n2. Tool Input Data:\n\nJSON\n\n{\n  \"web_search_query\": \"latest Bitcoin news and market sentiment today\"\n}\n3. Final Response:\n\nRespond ONLY with a valid JSON object.\n\nOutput Format Example:\n\nJSON\n\n{\n  \"agent_name\": \"AXIS-Social\",\n  \"social_score\": 0.65,\n  \"sentiment\": \"Slightly Bullish\",\n  \"evidence\": {\n    \"summary\": \"(For an 'aggressive' personality): Recent news focuses heavily on a potential price breakout, with social media amplifying narratives about 'whale accumulation', suggesting high-reward opportunities.\",\n    \"top_keywords\": [\"breakout\", \"whale accumulation\", \"Fed\"],\n    \"source_urls\": [\n      \"https://www.coindesk.com/...\",\n      \"https://www.reddit.com/r/...\"\n    ]\n  }\n}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a Social Sentiment Analyst AI, codenamed 'AXIS-Social'. You specialize in understanding the psychology and narrative of the crypto market by analyzing social media and news. You must cite your sources. Your final output MUST be a valid JSON object."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        416
+      ],
+      "id": "b9316afd-8ced-4313-82c7-5de599f0bfef",
+      "name": "Social Analysis AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini-2025-08-07",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini-2025-08-07"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        608
+      ],
+      "id": "e1ebbcaa-0a7e-455f-aefe-59fa0e724c5c",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "bCJYMaDMyTzF1YSZ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "=Description: Use this tool to get the most up-to-date, real-time information and news from the web. This should be your primary tool for understanding current events, breaking news, and fresh sentiment that might not be on Reddit yet. It can access information published just seconds ago.\nInputs: query (string, e.g., \"latest Bitcoin news and sentiment today\").",
+        "model": "sonar-pro",
+        "messages": {
+          "message": [
+            {
+              "content": "=You are a Social Sentiment Analyst AI, codenamed 'AXIS-Social'. You are a world-class investigative journalist specializing in real-time crypto sentiment. Your primary method is to use your web search tool to find the absolute latest news and social media discussions. You must always cite your sources. Your final output MUST be a valid JSON object.",
+              "role": "system"
+            },
+            {
+              "content": "=Mission: Find the most up-to-date news and social media sentiment for the given market. Your analysis must be based on information from today, {{\n$now.toFormat('yyyy-MM-dd') }}.\n\nCRITICAL RULES:\n\nYou MUST start by using your Web Search tool to find the latest articles and discussions.\n\nYou MUST include the direct URLs of the top 2-3 most important articles or threads as source_urls in your final report.\n\n1. Execute Analysis:\n\nUse your tools to find and analyze the latest information.\n\n2. Final Response:\n\nRespond ONLY with a valid JSON object in the format shown below, including 근거 and 출처.\n\nOutput Format Example:\n\nJSON\n\n{\n  \"agent_name\": \"AXIS-Social\",\n  \"social_score\": 0.65,\n  \"sentiment\": \"Slightly Bullish\",\n  \"evidence\": {\n    \"summary\": \"Recent news articles from today indicate a slight recovery in BTC price, driven by speculation about upcoming Fed rate cuts. Social media sentiment on Reddit is cautiously optimistic.\",\n    \"top_keywords\": [\"Fed rate cut\", \"BTC recovery\", \"cautious\"],\n    \"source_urls\": [\n      \"https://www.coindesk.com/markets/2025/09/07/bitcoin-rebounds-as-investors-eye-fed-meeting/\",\n      \"https://www.reddit.com/r/CryptoCurrency/comments/...\"\n    ]\n  }\n}\n"
+            }
+          ]
+        },
+        "simplify": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Simplify_Output', ``, 'boolean') }}",
+        "options": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.perplexityTool",
+      "typeVersion": 1,
+      "position": [
+        496,
+        608
+      ],
+      "id": "028f7b1f-3ab1-4b1d-84ff-717a14159658",
+      "name": "News Web Search",
+      "credentials": {
+        "perplexityApi": {
+          "id": "6X5h3xIQn4a1RORx",
+          "name": "Perplexity account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Mission: Analyze the long-term macro-economic environment to determine the current market risk, tailored to the user's personality.\n\n1. Execute Analysis:\n\nUse the Long_Term_Analysis_Tool.\n\nIn your ai_analysis.summary, frame your findings according to the provided personality (e.g., for 'conservative', highlight all potential threats; for 'aggressive', discuss volatility as a source of opportunity).\n\n2. Tool Input Data:\n\nJSON\n\n{\n  \"market\": \"{{ $('Webhook').item.json.body.market }}\",\n  \"analysis_days_back\": 90,\n  \"personality\": \"{{ $('Webhook').item.json.body.personality }}\"\n}\n3. Final Response:\n\nRespond ONLY with a valid JSON object.\n\nOutput Format Example:\n\nJSON\n\n{\n  \"agent_name\": \"AXIS-Risk\",\n  \"risk_level\": \"Medium\",\n  \"risk_score\": 45.5, // The 0-100 score\n  \"normalized_risk_score\": 0.09, // The -1 to +1 score for the manager\n  \"evidence\": {\n    \"analysis_period\": \"90 days\",\n    \"vix_index\": 21.5,\n    \"correlation_btc_ndx\": 0.65,\n    \"ai_summary\": \"(For a 'conservative' personality): Although the overall risk score is Medium, the strong correlation with declining equities and notable BTC volatility represent significant threats that must be respected.\"\n  }\n}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a Macro Risk Analyst AI, codenamed 'AXIS-Risk'. You are an expert in macro-economics and cross-asset correlation. Your focus is on the long-term market environment. You produce a final risk level supported by key macro-economic data. Your final output MUST be a valid JSON object."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        832
+      ],
+      "id": "de693566-283e-4ec6-8c76-404d2f3f7b54",
+      "name": "Risk Analysis AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini-2025-08-07",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini-2025-08-07"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        416,
+        1056
+      ],
+      "id": "df508f3d-596c-4214-acb3-64486cf3c974",
+      "name": "OpenAI Chat Model3",
+      "credentials": {
+        "openAiApi": {
+          "id": "bCJYMaDMyTzF1YSZ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Description: Provides a long-term (e.g., 90-day) strategic overview of the macro-economic environment. It analyzes Nasdaq correlation, VIX, DXY, etc., to determine the overall market \"weather\".\nInputs: market (string), analysis_type (string: 'daily' or 'weekly'), days_back (integer), personality (string), include_analysis (boolean).\nOutputs: a market_risk_level ('LOW', 'HIGH', 'CRITICAL', etc.) and a detailed report.",
+        "method": "POST",
+        "url": "http://fastapi:8000/api/v2/risk/analyze",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"market\": \"{{ $('Risk Data Extract').item.json.market }}\",\n  \"analysis_type\": \"{{ $('Risk Data Extract').item.json.analysis_type }}\",\n  \"days_back\": {{ $('Risk Data Extract').item.json.days_back }},\n  \"personality\": \"{{ $('Risk Data Extract').item.json.personality }}\",\n  \"include_analysis\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        544,
+        1056
+      ],
+      "id": "cb6e2a85-17eb-456b-a561-e33b9d20e9b9",
+      "name": "Risk_Analysis_Tool1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini-2025-08-07",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini-2025-08-07"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1488,
+        608
+      ],
+      "id": "07cd4403-d75c-43e3-b277-f5dbaba611e1",
+      "name": "OpenAI Chat Model5",
+      "credentials": {
+        "openAiApi": {
+          "id": "bCJYMaDMyTzF1YSZ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini-2025-08-07",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini-2025-08-07"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        224
+      ],
+      "id": "2c137f6c-3578-46d9-90a8-738b414551e9",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "bCJYMaDMyTzF1YSZ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Description: Searches Reddit for posts containing specific keywords in a given subreddit.\nInputs: subreddit (string, e.g., 'CryptoCurrency'), keyword (string, e.g., 'BTC sentiment').",
+        "operation": "search",
+        "subreddit": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Subreddit', ``, 'string') }}",
+        "keyword": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Keyword', ``, 'string') }}",
+        "limit": 10,
+        "additionalFields": {
+          "sort": "new"
+        }
+      },
+      "type": "n8n-nodes-base.redditTool",
+      "typeVersion": 1,
+      "position": [
+        576,
+        608
+      ],
+      "id": "8609972c-cdea-4ac3-80cb-7fafdfefc704",
+      "name": "Search for a post in Reddit2",
+      "credentials": {
+        "redditOAuth2Api": {
+          "id": "jBlTVfRhFz5nsSfj",
+          "name": "Reddit account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1040,
+        416
+      ],
+      "id": "cd149056-7e22-4a53-86fe-4184292e92b1",
+      "name": "순서보장용 Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5c101ec0-dd13-4032-8d31-c65098db2d6d",
+              "name": "chart_result",
+              "value": "={{ $('Chart Analys AI Agent').first().json.output }}",
+              "type": "string"
+            },
+            {
+              "id": "9a978955-15cf-4279-93f5-93d0ceb42833",
+              "name": "regime",
+              "value": "={{ $json.regime }}",
+              "type": "string"
+            },
+            {
+              "id": "7e504fe4-b78c-4791-b845-57f96f1bb4a8",
+              "name": "user_regim_weights",
+              "value": "={{ JSON.stringify($json)}}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        816,
+        224
+      ],
+      "id": "3e9c367b-5f65-46fc-a32d-bd8c86343ba1",
+      "name": "Chart Output Extract"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5c101ec0-dd13-4032-8d31-c65098db2d6d",
+              "name": "social_result",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        816,
+        416
+      ],
+      "id": "eba381b8-3ac9-41eb-935f-428998a99e0a",
+      "name": "Social Output Extract"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5c101ec0-dd13-4032-8d31-c65098db2d6d",
+              "name": "Risk_result",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        816,
+        832
+      ],
+      "id": "dbb3e8de-77c1-4f6e-a6d6-6661d594e95c",
+      "name": "Risk Output Extract"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "result",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        432
+      ],
+      "id": "e438d42b-50bc-4bfb-9660-ddb906dc7c4c",
+      "name": "요약용 합치기"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Mission: Calculate the final target_btc_percentage (from 0% to 70%) by synthesizing the three expert reports using a personality-driven dynamic weighting system.\n\nInput Reports from Your Analyst Team:\nJSON\n\n{\n  \"quant_report\": {{ $json.result[0].chart_result }}\n  \"social_report\": {{ $json.result[1].social_result }}\n  \"risk_report\": {{ $json.result[2].Risk_result }}\n  \"personality\": \"{{ $('Webhook').first().json.body.personality }}\"\n}\nCalculation Framework:\n1. Validate & Normalize Scores:\n\nFirst, validate and normalize the incoming scores as per the previous rules (especially the risk_score).\n\n2. Define Weights based on Personality:\n{{ JSON.stringify($('Get Weight Information API').first().json.data) }}\n\n3. Calculate Final Score:\n\nFinal_Score = (quant_score * weight_quant) + (social_score * weight_social) + (final_risk_score * weight_risk).\n\n4. Convert Final Score to Percentage:\n\nIf Final_Score is less than or equal to 0, the target_btc_percentage is 0.\n\nIf Final_Score is greater than 0, calculate using: target_btc_percentage = Final_Score * 70.\n\nRound the final percentage to two decimal places.\n\nFinal Response:\nBased on your calculations, respond ONLY with a valid JSON object in the format shown below. The reason must show the personality, the weights used, and the calculation steps.\n\nOutput Format Example:\nJSON\n\n{\n  \"target_btc_percentage\": 10.55,\n  \"reason\": \"Personality: Aggressive. Applying dynamic weights (Q:0.45, S:0.35, R:0.20). Final Score = (0.3 * 0.45) + (0.5 * 0.35) + (-0.2 * 0.20) = 0.135 + 0.175 - 0.04 = 0.27. Since 0.27 > 0, the target percentage is 0.27 * 70 = 18.90%.\",\n  \"evidence\": {\n    \"personality\": \"aggressive\",\n    \"weights\": {\n      \"quant\": 0.45,\n      \"social\": 0.35,\n      \"risk\": 0.20\n    },\n    \"quant_score\": 0.3,\n    \"social_score\": 0.5,\n    \"final_risk_score\": -0.2,\n    \"final_score\": 0.27\n  }\n}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the Head Portfolio Manager AI, codenamed 'AXIS-Prime'. You lead a team of three specialist AIs. Your sole purpose is to synthesize the scores from your team's reports using a defined weighting system to calculate the final, optimal Bitcoin holding percentage (target_btc_percentage). You are a quantitative, rule-based decision engine. Your final output MUST be a valid JSON object."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1488,
+        432
+      ],
+      "id": "3c7f808c-8498-4271-a949-529c7e3f47ed",
+      "name": "The Analysis AI Agent"
+    },
+    {
+      "parameters": {
+        "toolDescription": "=Description:\nRetrieves the currently active quantitative indicator weights for different market regimes:\n\t•\trange (횡보장): sideways/consolidation market\n\t•\ttrend (추세장): trending market\n",
+        "url": "http://fastapi:8000/api/v2/information/weights/chart",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        224
+      ],
+      "id": "a370b235-be4a-4700-848c-da1ef31f5493",
+      "name": "Regime_Weights_Tool"
+    },
+    {
+      "parameters": {
+        "url": "=http://fastapi:8000/api/v2/information/weights/strategy/{{ $('Webhook').item.json.body.personality }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -496,
+        416
+      ],
+      "id": "e7b66478-d8cc-46a8-aab5-78a48479423f",
+      "name": "Get Weight Information API"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fastapi:8000/api/v2/analysis/record_report",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"user_idx\": {{ $('Webhook').first().json.body.user_idx }} ,\n  \"market_regime\": \"{{ $json.regime }}\",\n  \"used_regime_weights\": \n      {{ JSON.stringify($json.user_regim_weights) }} ,\n  \"quant_report\":  {{ $json.chart_result }}\n  ,\n  \"social_report\": {{ $json.social_result }}\n  ,\n  \"risk_report\":  {{ $json.Risk_result }}\n  ,\n  \"analyst_summary\": \n    {{ $json.agent_result }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2064,
+        432
+      ],
+      "id": "941fc3d2-345d-4d91-b153-e8e73e201416",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code Node (JavaScript) - robust parsing & coercion\n\nfunction toNumber(v) {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : null;\n}\n\nconst results = [];\n\nfor (const item of items) {\n  // 1) output이 문자열이든 객체든 파싱\n  let parsed = item.json.output;\n  if (typeof parsed === 'string') {\n    try { parsed = JSON.parse(parsed); } catch (e) { parsed = {}; }\n  } else if (typeof parsed !== 'object' || parsed === null) {\n    parsed = {};\n  }\n\n  // 2) 안전한 참조\n  const chart = parsed.chart_result || {};\n  const evidence = chart.evidence || {};\n  const weights = parsed.regime_weights || {};\n  const range = weights.range || {};\n  const trend = weights.trend || {};\n\n  // (선택) 현재 레짐에 맞는 가중치만 뽑고 싶다면:\n  const regime = evidence.regime || item.json.regime || item.json.regim || null;\n  const usedRegimeWeights = regime === 'range' ? range : (regime === 'trend' ? trend : {});\n\n  results.push({\n    json: {\n      agent_name: chart.agent_name ?? null,\n      quant_score: toNumber(chart.quant_score),\n      signal: chart.signal ?? null,\n\n      timeframe: evidence.timeframe ?? null,\n      regime,\n      adx: toNumber(evidence.adx),\n      rsi: toNumber(evidence.rsi),\n      macd_histogram: toNumber(evidence.macd_histogram),\n      confidence: toNumber(evidence.confidence),\n      position_size: evidence.position_size ?? null,\n      current_price: toNumber(evidence.current_price),\n      summary: evidence.summary ?? null,\n\n      // 가중치: 전체 보관\n      range_weights: {\n        RSI: range.RSI ?? null,\n        STOCHASTIC: range.STOCHASTIC ?? null,\n        BOLLINGER_BANDS: range.BOLLINGER_BANDS ?? null,\n        WILLIAMS_R: range.WILLIAMS_R ?? null,\n        CCI: range.CCI ?? null,\n        VOLUME: range.VOLUME ?? null,\n      },\n      trend_weights: {\n        RSI: trend.RSI ?? null,\n        MACD: trend.MACD ?? null,\n        ADX: trend.ADX ?? null,\n        BOLLINGER_BANDS: trend.BOLLINGER_BANDS ?? null,\n        MOVING_AVERAGE: trend.MOVING_AVERAGE ?? null,\n        VOLUME: trend.VOLUME ?? null,\n      },\n\n      // (선택) 현재 레짐 기준으로만 쓸 가중치\n      used_regime_weights: usedRegimeWeights,\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "c6747796-6a1a-4a5d-90df-c47f5db58d3c",
+      "name": "Chart Regime Data Extract"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3c74b913-d0a1-4fa9-8d22-d31e6cd59d3c",
+              "name": "agent_result",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "b3653840-8ac1-4401-9568-274a3e6f3902",
+              "name": "chart_result",
+              "value": "={{ $('Chart Output Extract').first().json.chart_result }}",
+              "type": "string"
+            },
+            {
+              "id": "e2508a9a-cb4e-49f4-bca3-132950bb565b",
+              "name": "social_result",
+              "value": "={{ $('Social Output Extract').first().json.social_result }}",
+              "type": "string"
+            },
+            {
+              "id": "114b9075-8dd7-4ed1-bdf4-cf58d2bdf668",
+              "name": "Risk_result",
+              "value": "={{ $('Risk Output Extract').first().json.Risk_result }}",
+              "type": "string"
+            },
+            {
+              "id": "a408ba61-c63d-4efe-9d4c-b3019c72f61d",
+              "name": "regime",
+              "value": "={{ $('Chart Output Extract').first().json.user_regim_weights.regime }}",
+              "type": "string"
+            },
+            {
+              "id": "2a679590-afc3-4eb2-bc87-cdf0440952cb",
+              "name": "user_regim_weights",
+              "value": "={{ JSON.stringify($('Chart Output Extract').first().json.user_regim_weights.used_regime_weights) }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1840,
+        432
+      ],
+      "id": "cb1bd7bb-c516-4c37-b370-dd160390b741",
+      "name": "Edit HTTP Foramat"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "HelthCheck",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Chart Data Extract",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Social Data Extract1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Risk Data Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HelthCheck": {
+      "main": [
+        [
+          {
+            "node": "Get Weight Information API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Binance_Analyze_Chart_Indicators": {
+      "ai_tool": [
+        [
+          {
+            "node": "Chart Analys AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart Data Extract": {
+      "main": [
+        [
+          {
+            "node": "Chart Analys AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Social Data Extract1": {
+      "main": [
+        [
+          {
+            "node": "Social Analysis AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Social Analysis AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "News Web Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "Social Analysis AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Data Extract": {
+      "main": [
+        [
+          {
+            "node": "Risk Analysis AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Risk Analysis AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk_Analysis_Tool1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Risk Analysis AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart Analys AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Chart Regime Data Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Social Analysis AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Social Output Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Analysis AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Risk Output Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "The Analysis AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Chart Analys AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search for a post in Reddit2": {
+      "ai_tool": [
+        [
+          {
+            "node": "Social Analysis AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "순서보장용 Merge": {
+      "main": [
+        [
+          {
+            "node": "요약용 합치기",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart Output Extract": {
+      "main": [
+        [
+          {
+            "node": "순서보장용 Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Social Output Extract": {
+      "main": [
+        [
+          {
+            "node": "순서보장용 Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Risk Output Extract": {
+      "main": [
+        [
+          {
+            "node": "순서보장용 Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "요약용 합치기": {
+      "main": [
+        [
+          {
+            "node": "The Analysis AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The Analysis AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Edit HTTP Foramat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regime_Weights_Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Chart Analys AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Weight Information API": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart Regime Data Extract": {
+      "main": [
+        [
+          {
+            "node": "Chart Output Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit HTTP Foramat": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6621afd0-0c97-4e3d-8294-47be9fa57dcd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a2921b999682edae3a2715cd1ca3f48f1d4146114a1da1773e483051dfd3d293"
+  },
+  "id": "weVhm5gRm3zGf4TN",
+  "tags": []
+}

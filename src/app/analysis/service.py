@@ -7,6 +7,7 @@ import asyncpg
 
 from src.common.utils.logger import set_logger
 from src.config.database import database_config
+from src.app.autotrading_v2.quantitative_service import QuantitativeServiceV2
 
 logger = set_logger(__name__)
 
@@ -89,4 +90,85 @@ class AnalysisService:
 
         except Exception as e:
             logger.error(f"❌ 차트 분석 조회 실패: {str(e)}")
+            raise
+
+    async def get_chart_data_for_ai(
+        self,
+        market: str,
+        timeframe: str = "minutes:60",
+        count: int = 200,
+        exchange: str = "binance"
+    ) -> Dict[str, Any]:
+        """
+        AI 분석을 위한 차트 데이터 조회
+
+        Args:
+            market: 마켓 심볼 (예: BTC/USDT)
+            timeframe: 시간 프레임 (예: minutes:60)
+            count: 캔들 개수
+            exchange: 거래소
+
+        Returns:
+            AI 분석용 차트 데이터
+        """
+        try:
+            # QuantitativeServiceV2를 사용하여 실시간 차트 분석
+            quantitative_service = QuantitativeServiceV2()
+
+            # 차트 분석 실행
+            analysis_result = await quantitative_service.analyze_market(
+                market=market,
+                timeframe=timeframe,
+                count=count,
+                exchange=exchange
+            )
+
+            if not analysis_result or analysis_result.get('status') != 'success':
+                raise Exception(f"차트 분석 실패: {analysis_result}")
+
+            # AI 분석에 필요한 데이터 추출
+            detailed_data = analysis_result.get('detailed_data', {})
+            indicators = detailed_data.get('indicators', {})
+            scores = detailed_data.get('scores', {})
+            regime_info = detailed_data.get('regime_info', {})
+
+            # AI 분석용 데이터 구조 생성
+            chart_data = {
+                "market": market,
+                "timeframe": timeframe,
+                "exchange": exchange,
+                "indicators": {
+                    "adx": indicators.get('adx', 0),
+                    "rsi": indicators.get('rsi', 0),
+                    "macd": indicators.get('macd', 0),
+                    "macd_histogram": indicators.get('macd_histogram', 0),
+                    "bb_pct_b": indicators.get('bb_pct_b', 0),
+                    "volume_z_score": indicators.get('volume_z_score', 0),
+                    "ema_20": indicators.get('ema_20', 0),
+                    "ema_50": indicators.get('ema_50', 0),
+                    "ema_200": indicators.get('ema_200', 0)
+                },
+                "scores": {
+                    "rsi": scores.get('rsi', 0),
+                    "macd": scores.get('macd', 0),
+                    "bollinger": scores.get('bollinger', 0),
+                    "volume": scores.get('volume', 0),
+                    "momentum": scores.get('momentum', 0)
+                },
+                "regime_info": {
+                    "regime": regime_info.get('regime', 'range'),
+                    "confidence": regime_info.get('confidence', 0.5),
+                    "trend_strength": regime_info.get('trend_strength', 'weak')
+                },
+                "metadata": {
+                    "data_points": detailed_data.get('metadata', {}).get('data_points', count),
+                    "config": detailed_data.get('metadata', {}).get('config', {})
+                }
+            }
+
+            logger.info(f"✅ AI용 차트 데이터 조회 완료: {market}")
+            return chart_data
+
+        except Exception as e:
+            logger.error(f"❌ AI용 차트 데이터 조회 실패: {str(e)}")
             raise
