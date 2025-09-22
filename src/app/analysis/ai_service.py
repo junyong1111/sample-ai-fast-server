@@ -406,6 +406,162 @@ CRITICAL RULES:
         else:
             return "LOW"
 
+    async def analyze_multiple_coins_social_with_ai(self, coins_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        여러 코인을 한 번에 AI로 소셜 분석 (비용 효율적)
+        """
+        try:
+            prompt = self._create_multi_coin_social_analysis_prompt(coins_data)
+            messages = [
+                SystemMessage(content=self._get_multi_coin_social_system_message()),
+                HumanMessage(content=prompt)
+            ]
+            response = await self.llm.ainvoke(messages)
+            result = self._parse_ai_response(response.content)
+            logger.info(f"✅ AI 다중 코인 소셜 분석 완료: {len(coins_data)}개 코인")
+            return result
+        except Exception as e:
+            logger.error(f"❌ AI 다중 코인 소셜 분석 실패: {str(e)}")
+            return self._create_fallback_multi_social_analysis(coins_data)
+
+    def _create_multi_coin_social_analysis_prompt(self, coins_data: List[Dict[str, Any]]) -> str:
+        """다중 코인 AI 소셜 분석 프롬프트 생성"""
+        coins_summary = []
+        for coin_data in coins_data:
+            coin_summary = {
+                "market": coin_data.get('market', 'Unknown'),
+                "social_score": coin_data.get('social_score', 50),
+                "sentiment": coin_data.get('sentiment', 'neutral'),
+                "social_sources": coin_data.get('social_sources', {}),
+                "analysis_timestamp": coin_data.get('analysis_timestamp', '')
+            }
+            coins_summary.append(coin_summary)
+
+        prompt = f"""
+Mission: Analyze multiple cryptocurrency social sentiment profiles and generate structured, purely analytical JSON reports for each coin. Your role is to provide objective social sentiment scores based on data, not trading recommendations.
+
+Coins Data ({len(coins_summary)} coins):
+{json.dumps(coins_summary, indent=2)}
+
+Analysis Instructions:
+1. For each coin, determine the social sentiment level based on social_score and other indicators
+2. Provide evidence including social metrics and community engagement
+3. Calculate confidence based on data quality and consistency
+4. Consider the sentiment trends and social buzz
+
+CRITICAL RULES:
+1. Your response MUST be ONLY the valid JSON object.
+2. Do NOT include trading recommendations.
+3. Each coin's sentiment_level field MUST be one of: "VERY_POSITIVE", "POSITIVE", "NEUTRAL", "NEGATIVE", "VERY_NEGATIVE".
+4. social_score should be between 0 and 100 for each coin.
+5. Analyze all {len(coins_summary)} coins in a single response.
+
+Output Format:
+{{
+  "analysis_results": {{
+    "BTC/USDT": {{
+      "social_result": {{
+        "agent_name": "AXIS-Social",
+        "social_score": 75.5,
+        "sentiment_level": "POSITIVE",
+        "normalized_social_score": 0.51,
+        "evidence": {{
+          "reddit_mentions": 150,
+          "reddit_sentiment": 0.6,
+          "cryptocompare_volume": 1000,
+          "perplexity_buzz": "high",
+          "confidence": 0.8
+        }}
+      }}
+    }},
+    "ETH/USDT": {{
+      "social_result": {{
+        "agent_name": "AXIS-Social",
+        "social_score": 65.2,
+        "sentiment_level": "POSITIVE",
+        "normalized_social_score": 0.30,
+        "evidence": {{
+          "reddit_mentions": 120,
+          "reddit_sentiment": 0.55,
+          "cryptocompare_volume": 800,
+          "perplexity_buzz": "medium",
+          "confidence": 0.75
+        }}
+      }}
+    }}
+  }},
+  "summary": {{
+    "total_coins": {len(coins_summary)},
+    "very_positive_coins": 0,
+    "positive_coins": 0,
+    "neutral_coins": 0,
+    "negative_coins": 0,
+    "very_negative_coins": 0,
+    "average_social_score": 0.0
+  }}
+}}
+"""
+        return prompt
+
+    def _get_multi_coin_social_system_message(self) -> str:
+        """다중 코인 소셜 분석용 시스템 메시지"""
+        return """You are a JSON-only data generation AI specialized in multi-coin cryptocurrency social sentiment analysis. Your ONLY purpose is to analyze multiple coins and respond with a valid JSON object.
+
+CRITICAL RULES:
+- Your response MUST be ONLY the valid JSON object.
+- Your response MUST start with { and end with }.
+- DO NOT include ANY text, explanations, apologies, or markdown formatting.
+- Analyze ALL provided coins in a single response.
+- Adhere strictly to the JSON format. Use double quotes for all keys and string values."""
+
+    def _create_fallback_multi_social_analysis(self, coins_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """AI 소셜 분석 실패시 기본 분석 결과 (다중 코인용)"""
+        analysis_results = {}
+
+        for coin_data in coins_data:
+            market = coin_data.get('market', 'Unknown')
+            social_score = coin_data.get('social_score', 50)
+            sentiment_level = self._determine_sentiment_level(social_score)
+
+            analysis_results[market] = {
+                "social_result": {
+                    "agent_name": "AXIS-Social-Fallback",
+                    "social_score": social_score,
+                    "sentiment_level": sentiment_level,
+                    "normalized_social_score": (social_score - 50) / 50,  # -1 to +1
+                    "evidence": {
+                        "analysis_timestamp": coin_data.get('analysis_timestamp', ''),
+                        "confidence": 0.5
+                    }
+                }
+            }
+
+        return {
+            "analysis_results": analysis_results,
+            "summary": {
+                "total_coins": len(coins_data),
+                "very_positive_coins": sum(1 for coin in coins_data if self._determine_sentiment_level(coin.get('social_score', 50)) == "VERY_POSITIVE"),
+                "positive_coins": sum(1 for coin in coins_data if self._determine_sentiment_level(coin.get('social_score', 50)) == "POSITIVE"),
+                "neutral_coins": sum(1 for coin in coins_data if self._determine_sentiment_level(coin.get('social_score', 50)) == "NEUTRAL"),
+                "negative_coins": sum(1 for coin in coins_data if self._determine_sentiment_level(coin.get('social_score', 50)) == "NEGATIVE"),
+                "very_negative_coins": sum(1 for coin in coins_data if self._determine_sentiment_level(coin.get('social_score', 50)) == "VERY_NEGATIVE"),
+                "average_social_score": sum(coin.get('social_score', 50) for coin in coins_data) / len(coins_data)
+            }
+        }
+
+    def _determine_sentiment_level(self, social_score: float) -> str:
+        """소셜 점수에 따른 감정 레벨 결정"""
+        if social_score >= 80:
+            return "VERY_POSITIVE"
+        elif social_score >= 60:
+            return "POSITIVE"
+        elif social_score >= 40:
+            return "NEUTRAL"
+        elif social_score >= 20:
+            return "NEGATIVE"
+        else:
+            return "VERY_NEGATIVE"
+
     def _create_fallback_multi_analysis(self, coins_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """AI 분석 실패시 기본 분석 결과 (다중 코인용)"""
         analysis_results = {}

@@ -34,6 +34,14 @@ setup(
         "langgraph>=0.1.0",                    # 랭그래프
         "scipy>=1.11.0",                       # 상관관계 계산
         "scikit-learn>=1.3.0",                 # 머신러닝 유틸리티
+
+        # 소셜 분석 에이전트 의존성
+        "praw>=7.10.0",                        # Reddit API
+        "requests>=2.32.5",                    # HTTP 요청
+        "os>=0.1.0",                           # 운영체제 관련 유틸리티
+        "asyncio>=3.4.3",                      # 비동기 프로그래밍
+        "json>=2.0.9",                         # JSON 파싱
+        "logging>=0.5.1.2",                    # 로깅
     ],
     entry_points={
         "console_scripts": [

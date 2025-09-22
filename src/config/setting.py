@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: Final[int] = getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', 30)
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: Final[int] = getenv('JWT_REFRESH_TOKEN_EXPIRE_DAYS', 7)
 
+    #Reddit 설정
+    REDDIT_CLIENT_ID: Final[str] = getenv('REDDIT_CLIENT_ID', "")
+    REDDIT_CLIENT_SECRET: Final[str] = getenv('REDDIT_CLIENT_SECRET', "")
+    REDDIT_USER_AGENT: Final[str] = getenv('REDDIT_USER_AGENT', "QuantumInsight/1.0 by YourUsername")
+
+    #Perplexity 설정
+    PERPLEXITY_API_KEY: Final[str] = getenv('PERPLEXITY_API_KEY', "")
+
     # 데이터베이스 설정 (PoolCreate 클래스와 호환되도록 수정)
     @property
     def DATABASES(self):
