@@ -297,53 +297,6 @@ async def get_regime_weights():
 
 # ===== 2단계: 리스크 분석 에이전트 =====
 
-@router.post(
-    "/risk/analyze",
-    tags=["Autotrading-Risk"],
-    response_model=RiskAnalysisResponse,
-    summary="리스크 분석 (N8n 호환)",
-    description="yfinance, LangChain, LangGraph를 활용하여 시장 리스크를 분석하고 요약합니다."
-)
-async def analyze_risk(
-    request: RiskAnalysisRequest = Body(
-        ...,
-        example={
-            "market": "BTC/USDT",
-            "analysis_type": "daily",
-            "days_back": 90,
-            "personality": "neutral",
-            "include_analysis": True
-        }
-    )
-):
-    """
-    리스크 분석 실행 (POST 방식)
-
-    N8n에서 정기적으로 호출하여 시장 리스크를 분석합니다.
-    """
-    try:
-        # 지연 초기화된 서비스 사용
-        service = get_risk_service()
-        result = await service.analyze_risk(
-            market=request.market,
-            analysis_type=request.analysis_type,
-            days_back=request.days_back,
-            personality=request.personality,
-            include_analysis=request.include_analysis
-        )
-        # 디버깅: result 구조 확인
-        print(f"DEBUG: result keys = {result.keys() if isinstance(result, dict) else 'Not a dict'}")
-        print(f"DEBUG: result = {result}")
-
-        return RiskAnalysisResponse(**result)
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"리스크 분석 실패: {str(e)}"
-        )
-
-
 
 # ===== 헬스체크 및 유틸리티 =====
 

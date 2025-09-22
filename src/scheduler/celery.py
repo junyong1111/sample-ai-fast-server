@@ -17,7 +17,8 @@ app.autodiscover_tasks()
 
 # 태스크 수동 등록 (autodiscover가 작동하지 않는 경우를 대비)
 try:
-    from src.scheduler.tasks import simple_chart_analysis
+    from src.scheduler.tasks import chart_analysis
+    from src.scheduler.tasks import risk_analysis
     print("✅ 간단한 태스크 모듈 로드 성공")
 except ImportError as e:
     print(f"❌ 태스크 모듈 로드 실패: {e}")

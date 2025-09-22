@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 
 from celery import Celery
-from src.scheduler.celery import app
+from src.scheduler.celery import app as celery_app
 from src.common.utils.logger import set_logger
 from src.app.autotrading_v2.quantitative_service import QuantitativeServiceV2
 
@@ -161,7 +161,7 @@ async def save_to_database(market: str, analysis_data: Dict[str, Any], task_id: 
         logger.error(f"❌ [DB-{task_id}] 저장 실패: {market} - {str(e)}")
         return False
 
-@app.task(bind=True, name='scheduler.tasks.simple_chart_analysis.analyze_top_20_coins')
+@celery_app.task(bind=True, name='scheduler.tasks.chart_analysis.analyze_top_20_coins')
 def analyze_top_20_coins(self, timeframe: str = "minutes:60", count: int = 200, exchange: str = "binance"):
     """
     상위 20개 코인 차트 분석 (API를 통한 동적 코인 목록)
@@ -271,7 +271,7 @@ def analyze_top_20_coins(self, timeframe: str = "minutes:60", count: int = 200, 
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
-@app.task(name='scheduler.tasks.simple_chart_analysis.get_all_analyses')
+@celery_app.task(name='scheduler.tasks.chart_analysis.get_all_analyses')
 def get_all_analyses() -> List[Dict[str, Any]]:
     """
     모든 분석 결과 조회 (asyncpg 사용)
@@ -322,7 +322,7 @@ def get_all_analyses() -> List[Dict[str, Any]]:
         logger.error(f"❌ 분석 결과 조회 실패: {str(e)}")
         return []
 
-@app.task(name='scheduler.tasks.simple_chart_analysis.health_check')
+@celery_app.task(name='scheduler.tasks.chart_analysis.health_check')
 def health_check() -> Dict[str, Any]:
     """
     간단한 헬스 체크

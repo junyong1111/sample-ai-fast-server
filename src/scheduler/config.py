@@ -18,8 +18,8 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
 # 태스크 설정
-CELERY_TASK_TIME_LIMIT = 300  # 5분
-CELERY_TASK_SOFT_TIME_LIMIT = 240  # 4분
+CELERY_TASK_TIME_LIMIT = 600  # 10분
+CELERY_TASK_SOFT_TIME_LIMIT = 480  # 8분
 
 # Beat 스케줄러 설정
 CELERY_BEAT_SCHEDULER = 'celery.beat:PersistentScheduler'
@@ -28,8 +28,14 @@ CELERY_BEAT_SCHEDULER = 'celery.beat:PersistentScheduler'
 CELERY_BEAT_SCHEDULE = {
     # 상위 20개 코인 차트 분석 (5분마다)
     'top-20-chart-analysis': {
-        'task': 'scheduler.tasks.simple_chart_analysis.analyze_top_20_coins',
+        'task': 'scheduler.tasks.chart_analysis.analyze_top_20_coins',
         'schedule': 300.0,  # 5분마다 실행
         'args': ('minutes:60', 200, 'binance')
+    },
+    # 상위 20개 코인 리스크 분석 (1시간마다)
+    'top-20-risk-analysis': {
+        'task': 'scheduler.tasks.risk_analysis.analyze_top_20_risk',
+        'schedule': 3600.0,  # 1시간마다 실행
+        'args': ()
     },
 }
