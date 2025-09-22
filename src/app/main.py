@@ -98,7 +98,7 @@ prefix_url = '/api/v2'
 app.include_router(user_router.router, prefix=prefix_url)
 app.include_router(autotrading_v2_router.router, prefix=prefix_url)
 app.include_router(information_router.router, prefix=prefix_url)
-app.include_router(analysis_router.router, prefix=f"{prefix_url}/analysis")
+app.include_router(analysis_router, prefix=f"{prefix_url}/analysis")
 
 
 

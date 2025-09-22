@@ -18,7 +18,7 @@ from .models import (
     TradeExecutionRequest, TradeExecutionResponse,
     TradeExecutionDataResponse, TradeExecutionListResponse
 )
-from src.scheduler.tasks.chart_analysis_task.func import ChartAnalysisFunc
+# from src.scheduler.tasks.chart_analysis_task.func import ChartAnalysisFunc  # 삭제된 모듈
 from src.common.utils.logger import set_logger
 
 # 라우터 생성
@@ -35,11 +35,12 @@ chart_analysis_func = None
 logger = set_logger("autotrading_v2_router")
 
 def get_chart_analysis_func():
-    """ChartAnalysisFunc 싱글톤 인스턴스 반환"""
-    global chart_analysis_func
-    if chart_analysis_func is None:
-        chart_analysis_func = ChartAnalysisFunc(logger)
-    return chart_analysis_func
+    """ChartAnalysisFunc 싱글톤 인스턴스 반환 - 삭제된 모듈로 인해 비활성화"""
+    # global chart_analysis_func
+    # if chart_analysis_func is None:
+    #     chart_analysis_func = ChartAnalysisFunc(logger)
+    # return chart_analysis_func
+    return None  # 임시로 None 반환
 
 def get_risk_service():
     """리스크 분석 서비스 지연 초기화"""
@@ -116,6 +117,18 @@ async def analyze_quantitative_indicators_cached(
         # Function 인스턴스 가져오기
         func = get_chart_analysis_func()
 
+        # 삭제된 모듈로 인해 기능 비활성화
+        if func is None:
+            logger.warning("⚠️ [캐시] ChartAnalysisFunc가 비활성화되어 있습니다. 직접 분석을 수행합니다.")
+            # 직접 분석 수행 (QuantitativeServiceV2 사용)
+            result = await quantitative_service.analyze_market(
+                market=market,
+                timeframe=timeframe,
+                count=count,
+                exchange=exchange
+            )
+            return result
+
         # 캐시 확인 (강제 새로고침이 아닌 경우)
         if not force_refresh:
             cached_result = await func.get_latest_analysis(market)
@@ -161,6 +174,15 @@ async def get_all_quantitative_analyses():
 
         # Function 인스턴스 가져오기
         func = get_chart_analysis_func()
+
+        # 삭제된 모듈로 인해 기능 비활성화
+        if func is None:
+            logger.warning("⚠️ [캐시] ChartAnalysisFunc가 비활성화되어 있습니다. 빈 결과를 반환합니다.")
+            return {
+                "status": "success",
+                "data": [],
+                "message": "ChartAnalysisFunc가 비활성화되어 있습니다."
+            }
 
         # 모든 캐시된 분석 결과 조회
         cached_results = await func.get_all_latest_analyses()

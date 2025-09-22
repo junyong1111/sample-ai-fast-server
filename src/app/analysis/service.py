@@ -1,108 +1,92 @@
 """
-분석 보고서 관련 서비스
+차트 분석 조회 서비스
 """
+from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Any
+import asyncpg
 
-from typing import Optional, List
-from src.app.analysis.models import AnalysisReportRequest, AnalysisReportResponse, AnalysisReportData
-from src.app.analysis.repository import AnalysisRepository
-from src.common.utils.response import JSendResponse
-from src.common.error import JSendError, ErrorCode
-from src.package.db import connection
+from src.common.utils.logger import set_logger
+from src.config.database import database_config
 
+logger = set_logger(__name__)
 
 class AnalysisService:
-    """분석 보고서 서비스"""
+    """차트 분석 조회 서비스"""
 
-    def __init__(self, logger):
-        self.logger = logger
-        self.analysis_repository = AnalysisRepository(logger)
+    async def _get_db_connection(self):
+        """데이터베이스 연결"""
+        return await asyncpg.connect(
+            host=database_config.POSTGRESQL_DB_HOST,
+            port=int(database_config.POSTGRESQL_DB_PORT),
+            database=database_config.POSTGRESQL_DB_DATABASE,
+            user=database_config.POSTGRESQL_DB_USER,
+            password=database_config.POSTGRESQL_DB_PASSWORD
+        )
 
-    async def save_analysis_report(self, request: AnalysisReportRequest) -> JSendResponse:
-        """분석 보고서 저장"""
+    async def get_chart_analysis_by_tickers(
+        self,
+        tickers: List[str],
+        hours_back: int = 24,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        특정 티커들의 차트 분석 결과 조회
+
+        Args:
+            tickers: 조회할 티커 리스트
+            hours_back: 몇 시간 전부터 조회할지
+            limit: 최대 조회 개수
+
+        Returns:
+            List[Dict]: 분석 결과 리스트
+        """
         try:
-            self.logger.info(f"분석 보고서 저장 시작: user_idx={request.user_idx}")
+            conn = await self._get_db_connection()
+            try:
+                # 시간 범위 계산 (timezone 정보 제거)
+                now_utc = datetime.now(timezone.utc)
+                start_time_naive = now_utc.replace(tzinfo=None) - timedelta(hours=hours_back)
+                start_time = start_time_naive  # timezone 정보가 없는 datetime 객체
 
-            async with connection() as session:
-                analysis_report_idx = await self.analysis_repository.save_analysis_report(
-                    session=session,
-                    request=request
-                )
+                # 티커 리스트를 SQL IN 절에 사용할 수 있도록 변환
+                ticker_placeholders = ','.join([f'${i+1}' for i in range(len(tickers))])
+                start_time_param = len(tickers) + 1
+                limit_param = len(tickers) + 2
 
-            self.logger.info(f"분석 보고서 저장 성공: analysis_report_idx={analysis_report_idx}")
+                query = f"""
+                    SELECT
+                        asset_symbol,
+                        overall_score,
+                        quant_score,
+                        market_regime,
+                        weight_snapshot,
+                        indicator_scores,
+                        full_analysis_data,
+                        created_at,
+                        expires_at
+                    FROM chart_analysis_reports
+                    WHERE asset_symbol IN ({ticker_placeholders})
+                    AND created_at >= ${start_time_param}::timestamp
+                    ORDER BY created_at DESC
+                    LIMIT ${limit_param}
+                """
 
-            return JSendResponse(
-                status="success",
-                data={
-                    "analysis_report_idx": analysis_report_idx,
-                    "message": "분석 보고서가 성공적으로 저장되었습니다."
-                }
-            )
+                # 쿼리 실행 (파라미터 순서: tickers, start_time, limit)
+                rows = await conn.fetch(query, *tickers, start_time, limit)
+
+                # 결과를 딕셔너리로 변환
+                results = []
+                for row in rows:
+                    result_dict = dict(row)
+                    # JSONB 필드는 자동으로 파싱되므로 추가 처리 불필요
+                    results.append(result_dict)
+
+                logger.info(f"✅ 차트 분석 조회 성공: {len(results)}개 결과")
+                return results
+
+            finally:
+                await conn.close()
 
         except Exception as e:
-            self.logger.error(f"분석 보고서 저장 실패: {e}")
-            raise JSendError(
-                code=ErrorCode.Common.DEFAULT_ERROR[0],
-                message=f"분석 보고서 저장 중 오류가 발생했습니다: {str(e)}"
-            )
-
-    async def get_analysis_report(self, analysis_report_idx: int) -> JSendResponse:
-        """분석 보고서 조회"""
-        try:
-            self.logger.info(f"분석 보고서 조회 시작: analysis_report_idx={analysis_report_idx}")
-
-            async with connection() as session:
-                report = await self.analysis_repository.get_analysis_report(
-                    session=session,
-                    analysis_report_idx=analysis_report_idx
-                )
-
-            if not report:
-                raise JSendError(
-                    code=ErrorCode.Common.NOT_FOUND[0],
-                    message="분석 보고서를 찾을 수 없습니다."
-                )
-
-            self.logger.info(f"분석 보고서 조회 성공: analysis_report_idx={analysis_report_idx}")
-
-            return JSendResponse(
-                status="success",
-                data=report.dict()
-            )
-
-        except JSendError:
+            logger.error(f"❌ 차트 분석 조회 실패: {str(e)}")
             raise
-        except Exception as e:
-            self.logger.error(f"분석 보고서 조회 실패: {e}")
-            raise JSendError(
-                code=ErrorCode.Common.DEFAULT_ERROR[0],
-                message=f"분석 보고서 조회 중 오류가 발생했습니다: {str(e)}"
-            )
-
-    async def get_user_analysis_reports(self, user_idx: int, limit: int = 10) -> JSendResponse:
-        """사용자의 분석 보고서 목록 조회"""
-        try:
-            self.logger.info(f"사용자 분석 보고서 목록 조회 시작: user_idx={user_idx}, limit={limit}")
-
-            async with connection() as session:
-                reports = await self.analysis_repository.get_user_analysis_reports(
-                    session=session,
-                    user_idx=user_idx,
-                    limit=limit
-                )
-
-            self.logger.info(f"사용자 분석 보고서 목록 조회 성공: count={len(reports)}")
-
-            return JSendResponse(
-                status="success",
-                data={
-                    "reports": [report.dict() for report in reports],
-                    "count": len(reports)
-                }
-            )
-
-        except Exception as e:
-            self.logger.error(f"사용자 분석 보고서 목록 조회 실패: {e}")
-            raise JSendError(
-                code=ErrorCode.Common.DEFAULT_ERROR[0],
-                message=f"사용자 분석 보고서 목록 조회 중 오류가 발생했습니다: {str(e)}"
-            )

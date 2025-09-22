@@ -26,9 +26,9 @@ CELERY_BEAT_SCHEDULER = 'celery.beat:PersistentScheduler'
 
 # Beat 스케줄 정의 - 배치 처리 방식
 CELERY_BEAT_SCHEDULE = {
-    # 간단한 차트 분석 (5분마다)
-    'simple-chart-analysis': {
-        'task': 'scheduler.tasks.simple_chart_analysis.analyze_major_coins',
+    # 상위 20개 코인 차트 분석 (5분마다)
+    'top-20-chart-analysis': {
+        'task': 'scheduler.tasks.simple_chart_analysis.analyze_top_20_coins',
         'schedule': 300.0,  # 5분마다 실행
         'args': ('minutes:60', 200, 'binance')
     },

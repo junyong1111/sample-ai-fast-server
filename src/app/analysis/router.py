@@ -1,100 +1,58 @@
 """
-분석 보고서 관련 라우터
+차트 분석 조회 API 라우터
 """
-
+from typing import List
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
-from src.app.analysis.models import AnalysisReportRequest, AnalysisReportResponse
-from src.app.analysis.service import AnalysisService
+
 from src.common.utils.logger import set_logger
-from src.common.error import JSendError
+from src.app.analysis.service import AnalysisService
 
-logger = set_logger("analysis_router")
+logger = set_logger(__name__)
+router = APIRouter(tags=["analysis"])
 
-# 라우터 인스턴스 생성
-router = APIRouter(tags=["Analysis"])
-
-# 서비스 인스턴스 생성
-analysis_service = AnalysisService(logger)
-
-
-@router.post("/record_report", response_model=AnalysisReportResponse)
-async def record_analysis_report(request: AnalysisReportRequest):
-    """
-    분석 보고서 저장 API
-
-    The Analysts 워크플로우에서 호출하는 API입니다.
-    모든 분석 에이전트의 결과를 종합하여 analysis_reports 테이블에 저장합니다.
-    """
-    try:
-        logger.info(f"분석 보고서 저장 요청: user_idx={request.user_idx}")
-
-        result = await analysis_service.save_analysis_report(request)
-
-        return AnalysisReportResponse(
-            status=result.status,
-            message=result.data.get("message", "분석 보고서가 성공적으로 저장되었습니다."),
-            data=result.data
-        )
-
-    except JSendError as e:
-        logger.error(f"분석 보고서 저장 실패: {e.message}")
-        raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        logger.error(f"분석 보고서 저장 중 예상치 못한 오류: {e}")
-        raise HTTPException(status_code=500, detail="서버 내부 오류가 발생했습니다.")
-
-
-@router.get("/report/{analysis_report_idx}")
-async def get_analysis_report(analysis_report_idx: int):
-    """
-    특정 분석 보고서 조회 API
-    """
-    try:
-        logger.info(f"분석 보고서 조회 요청: analysis_report_idx={analysis_report_idx}")
-
-        result = await analysis_service.get_analysis_report(analysis_report_idx)
-
-        return result
-
-    except JSendError as e:
-        logger.error(f"분석 보고서 조회 실패: {e.message}")
-        raise HTTPException(status_code=404, detail=e.message)
-    except Exception as e:
-        logger.error(f"분석 보고서 조회 중 예상치 못한 오류: {e}")
-        raise HTTPException(status_code=500, detail="서버 내부 오류가 발생했습니다.")
-
-
-@router.get("/user/{user_idx}/reports")
-async def get_user_analysis_reports(
-    user_idx: int,
-    limit: int = Query(default=10, ge=1, le=100, description="조회할 보고서 수 (1-100)")
+@router.get(
+    "",
+    summary="차트 분석 결과 조회",
+    description="특정 티커 목록과 시간 범위에 해당하는 차트 분석 결과를 조회합니다."
+)
+async def get_chart_analysis(
+    tickers: str = Query("BTC/USDT,ETH/USDT", description="조회할 티커 목록 (콤마로 구분, 예: BTC/USDT,ETH/USDT)"),
+    hours_back: int = Query(24, ge=1, le=720, description="몇 시간 전까지의 데이터를 조회할지 (최대 720시간 = 30일)"),
+    limit: int = Query(100, ge=1, le=1000, description="각 티커별로 조회할 최대 결과 수")
 ):
     """
-    사용자의 분석 보고서 목록 조회 API
+    특정 티커 목록과 시간 범위에 해당하는 차트 분석 결과를 조회합니다.
+
+    Args:
+        tickers: 조회할 티커 목록 (콤마로 구분)
+        hours_back: 몇 시간 전까지의 데이터를 조회할지
+        limit: 각 티커별로 조회할 최대 결과 수
+
+    Returns:
+        해당 티커들의 차트 분석 결과 리스트
     """
     try:
-        logger.info(f"사용자 분석 보고서 목록 조회 요청: user_idx={user_idx}, limit={limit}")
+        # 콤마로 구분된 티커 문자열을 리스트로 변환
+        ticker_list = [ticker.strip() for ticker in tickers.split(',') if ticker.strip()]
 
-        result = await analysis_service.get_user_analysis_reports(user_idx, limit)
+        if not ticker_list:
+            raise HTTPException(status_code=400, detail="티커 목록이 비어있습니다.")
 
-        return result
+        logger.info(f"📊 차트 분석 조회 요청: {len(ticker_list)}개 티커, {hours_back}시간 전부터")
 
-    except JSendError as e:
-        logger.error(f"사용자 분석 보고서 목록 조회 실패: {e.message}")
-        raise HTTPException(status_code=400, detail=e.message)
+        service = AnalysisService()
+        reports = await service.get_chart_analysis_by_tickers(ticker_list, hours_back, limit)
+
+        return {
+            "status": "success",
+            "data": reports,
+            "message": f"요청된 티커 및 시간 범위에 대한 차트 분석 결과를 성공적으로 조회했습니다.",
+            "query": {
+                "tickers": ticker_list,
+                "hours_back": hours_back,
+                "limit": limit
+            }
+        }
     except Exception as e:
-        logger.error(f"사용자 분석 보고서 목록 조회 중 예상치 못한 오류: {e}")
-        raise HTTPException(status_code=500, detail="서버 내부 오류가 발생했습니다.")
-
-
-@router.get("/health")
-async def health_check():
-    """
-    분석 서비스 헬스체크
-    """
-    return {
-        "status": "healthy",
-        "service": "analysis_service",
-        "message": "분석 서비스가 정상적으로 작동 중입니다."
-    }
+        logger.error(f"❌ 차트 분석 조회 API 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"차트 분석 조회 실패: {str(e)}")
